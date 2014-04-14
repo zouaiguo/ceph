@@ -140,16 +140,6 @@ class DispatchQueue;
       return static_cast<Pipe*>(RefCountedObject::get());
     }
 
-    bool is_connected() {
-      Mutex::Locker l(pipe_lock);
-      return state == STATE_OPEN;
-    }
-
-    char *recv_buf;
-    int recv_max_prefetch;
-    int recv_ofs;
-    int recv_len;
-
     enum {
       STATE_ACCEPTING,
       STATE_CONNECTING,

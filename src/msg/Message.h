@@ -326,6 +326,9 @@ public:
   uint32_t get_magic() const { return magic; }
   void set_magic(int _magic) { magic = _magic; }
 
+  uint32_t get_magic() { return magic; }
+  void set_magic(int _magic) { magic = _magic; }
+
   /*
    * If you use get_[data, middle, payload] you shouldn't
    * use it to change those bufferlists unless you KNOW

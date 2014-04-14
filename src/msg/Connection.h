@@ -185,5 +185,4 @@ public:
 
 typedef boost::intrusive_ptr<Connection> ConnectionRef;
 
-
 #endif /* CEPH_CONNECTION_H */
