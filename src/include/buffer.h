@@ -45,6 +45,12 @@
 #include "page.h"
 #include "crc32c.h"
 
+#if defined(HAVE_XIO)
+extern "C" {
+#include "libxio.h"
+}
+#endif /* HAVE_XIO */
+
 #ifdef __CEPH__
 # include "include/assert.h"
 #else
@@ -53,14 +59,14 @@
 
 #if __GNUC__ >= 4
   #define CEPH_BUFFER_API  __attribute__ ((visibility ("default")))
-#else
-  #define CEPH_BUFFER_API
-#endif
 
 #if defined(HAVE_XIO)
 struct xio_reg_mem;
 class XioDispatchHook;
 #endif
+=======
+class XioCompletionHook;
+>>>>>>> Add Xio buffer raw extensions.
 
 namespace ceph {
 
@@ -138,6 +144,10 @@ private:
   class raw_pipe;
   class raw_unshareable; // diagnostic, unshareable char buffer
 
+public:
+  class xio_mempool;
+  class xio_msg_buffer;
+
   friend std::ostream& operator<<(std::ostream& out, const raw &r);
 
 public:
@@ -160,6 +170,10 @@ public:
 
 #if defined(HAVE_XIO)
   static raw* create_msg(unsigned len, char *buf, XioDispatchHook *m_hook);
+#endif
+
+#if defined(HAVE_XIO)
+ static raw* create_msg(unsigned len, char *buf, XioCompletionHook *m_hook);
 #endif
 
   /*
@@ -520,7 +534,6 @@ xio_reg_mem* get_xio_mp(const buffer::ptr& bp);
 typedef buffer::ptr bufferptr;
 typedef buffer::list bufferlist;
 typedef buffer::hash bufferhash;
-
 
 inline bool operator>(bufferlist& l, bufferlist& r) {
   for (unsigned p = 0; ; p++) {
