@@ -38,13 +38,14 @@ public:
   static const int TYPE_MDS = CEPH_ENTITY_TYPE_MDS;
   static const int TYPE_OSD = CEPH_ENTITY_TYPE_OSD;
   static const int TYPE_CLIENT = CEPH_ENTITY_TYPE_CLIENT;
+  static const int TYPE_GENERIC_SERVER  = CEPH_ENTITY_TYPE_GENERIC_SERVER;
 
   static const int64_t NEW = -1;
 
   // cons
   entity_name_t() : _type(0), _num(0) { }
   entity_name_t(int t, int64_t n) : _type(t), _num(n) { }
-  entity_name_t(const ceph_entity_name &n) : 
+  entity_name_t(const ceph_entity_name &n) :
     _type(n.type), _num(n.num) { }
 
   // static cons
