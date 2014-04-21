@@ -169,18 +169,9 @@
 #define MSG_TIMECHECK             0x600
 #define MSG_MON_HEALTH            0x601
 
-// *** Message::encode() crcflags bits ***
-#define MSG_CRC_DATA           (1 << 0)
-#define MSG_CRC_HEADER         (1 << 1)
-#define MSG_CRC_ALL            (MSG_CRC_DATA | MSG_CRC_HEADER)
-
 // Xio Testing
 #define MSG_DATA_PING		  0x602
 
-// Xio intends to define messages 0x603..0x606
-
-// Special
-#define MSG_NOP                   0x607
 
 // ======================================================
 
@@ -222,6 +213,9 @@ protected:
   ConnectionRef connection;
 
   uint32_t magic;
+  uint32_t special_handling;
+
+  bi::list_member_hook<> dispatch_q;
 
   bi::list_member_hook<> dispatch_q;
 
@@ -232,6 +226,7 @@ public:
     friend class Message;
   public:
     CompletionHook(Message *_m) : m(_m) {}
+    virtual Message* get_message() { return m; }
     virtual void set_message(Message *_m) { m = _m; }
   };
 
@@ -263,6 +258,7 @@ public:
   Message()
     : connection(NULL),
       magic(0),
+      special_handling(0),
       completion_hook(NULL),
       byte_throttler(NULL),
       msg_throttler(NULL),
@@ -328,6 +324,8 @@ public:
 
   uint32_t get_magic() { return magic; }
   void set_magic(int _magic) { magic = _magic; }
+  uint32_t get_special_handling() { return special_handling; }
+  void set_special_handling(int n) { special_handling = n; }
 
   /*
    * If you use get_[data, middle, payload] you shouldn't
