@@ -38,6 +38,11 @@ public:
 			     << dendl;
     return this;
   }
+  RefCountedObject *add(int n) {
+    //generic_dout(0) << "RefCountedObject::add " << this << " " << nref.read() << " -> " << (nref.read() + n) << dendl;
+    nref.add(n);
+    return this;
+  }
   void put() {
     CephContext *local_cct = cct;
     int v = nref.dec();
