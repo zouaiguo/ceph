@@ -200,6 +200,7 @@ OSDService::OSDService(OSD *osd) :
   pg_recovery_stats(osd->pg_recovery_stats),
   cluster_messenger(osd->cluster_messenger),
   client_messenger(osd->client_messenger),
+  client_xio_messenger(osd->client_xio_messenger),
   logger(osd->logger),
   recoverystate_perf(osd->recoverystate_perf),
   monc(osd->monc),
@@ -1481,6 +1482,7 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
 	 Messenger *hb_front_serverm,
 	 Messenger *hb_back_serverm,
 	 Messenger *osdc_messenger,
+	 Messenger *xio_osdc_messenger,
 	 MonClient *mc,
 	 const std::string &dev, const std::string &jdev) :
   Dispatcher(cct_),
@@ -1498,7 +1500,9 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
 								      cct->_conf->auth_supported)),
   cluster_messenger(internal_messenger),
   client_messenger(external_messenger),
+  client_xio_messenger(xio_external_messenger),
   objecter_messenger(osdc_messenger),
+  objecter_xio_messenger(xio_osdc_messenger),
   monc(mc),
   logger(NULL),
   recoverystate_perf(NULL),
@@ -1889,6 +1893,9 @@ int OSD::init()
   hb_back_server_messenger->add_dispatcher_head(&heartbeat_dispatcher);
 
   objecter_messenger->add_dispatcher_head(service.objecter);
+
+  client_xio_messenger->add_dispatcher_head(this);
+  objecter_xio_messenger->add_dispatcher_head(&service.objecter_dispatcher);
 
   monc->set_want_keys(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD);
   r = monc->init();
@@ -5759,9 +5766,13 @@ void OSD::_dispatch(Message *m)
 
   switch (m->get_type()) {
 
-    // -- don't need lock -- 
+    // -- don't need lock --
   case CEPH_MSG_PING:
     dout(10) << "ping from " << m->get_source() << dendl;
+
+    /* XXX kill me */
+    cout << "ping from " << m->get_source() << std::endl;
+
     m->put();
     break;
 

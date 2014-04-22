@@ -32,6 +32,8 @@ using namespace std;
 #include "mon/MonMap.h"
 
 #include "msg/Messenger.h"
+#include "msg/XioMessenger.h"
+#include "msg/QueueStrategy.h"
 
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
@@ -431,6 +433,18 @@ int main(int argc, const char **argv)
   ms_hb_back_server->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   ms_hb_front_server->set_cluster_protocol(CEPH_OSD_PROTOCOL);
 
+  Messenger *ms_xio_public = new XioMessenger(g_ceph_context,
+					      entity_name_t::OSD(whoami), "xio client",
+					      getpid(),
+					      2 /* portals */,
+					      new QueueStrategy(2) /* dispatch strategy */);
+
+  Messenger *ms_xio_objecter = new XioMessenger(g_ceph_context,
+						entity_name_t::OSD(whoami), "xio objecter",
+						getpid(),
+						2 /* portals */,
+						new QueueStrategy(2) /* dispatch strategy */);
+
   cout << "starting osd." << whoami
        << " at " << ms_public->get_myaddr()
        << " osd_data " << g_conf->osd_data
@@ -564,6 +578,8 @@ int main(int argc, const char **argv)
   ms_hb_back_server->start();
   ms_cluster->start();
   ms_objecter->start();
+  ms_xio_public->start();
+  ms_xio_objecter->start();
 
   // start osd
   err = osd->init();
@@ -590,6 +606,8 @@ int main(int argc, const char **argv)
   ms_hb_back_server->wait();
   ms_cluster->wait();
   ms_objecter->wait();
+  ms_xio_public->wait();
+  ms_xio_objecter->wait();
 
   unregister_async_signal_handler(SIGHUP, sighup_handler);
   unregister_async_signal_handler(SIGINT, handle_osd_signal);
