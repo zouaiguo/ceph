@@ -29,11 +29,14 @@ using namespace std;
 #include "mon/MonClient.h"
 
 #include "msg/Messenger.h"
+#include "msg/XioMessenger.h"
+#include "msg/QueueStrategy.h"
 
 #include "include/CompatSet.h"
 
 #include "common/ceph_argparse.h"
 #include "common/pick_address.h"
+#include "common/address_helper.h"
 #include "common/Timer.h"
 #include "common/errno.h"
 #include "common/Preforker.h"
@@ -75,7 +78,7 @@ int obtain_monmap(MonitorDBStore &store, bufferlist &bl)
       assert(err == 0);
       assert(bl.length() > 0);
       dout(10) << __func__ << " read last committed monmap ver "
-               << latest_ver << dendl;
+	       << latest_ver << dendl;
       return 0;
     }
   }
@@ -263,7 +266,8 @@ int main(int argc, const char **argv)
 
   uuid_d fsid;
   std::string val;
-  for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
+  for (std::vector<const char*>::iterator i = args.begin();
+       i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
     } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
@@ -275,13 +279,16 @@ int main(int argc, const char **argv)
       compact = true;
     } else if (ceph_argparse_flag(args, i, "--force-sync", (char*)NULL)) {
       force_sync = true;
-    } else if (ceph_argparse_flag(args, i, "--yes-i-really-mean-it", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, i, "--yes-i-really-mean-it",
+				  (char*)NULL)) {
       yes_really = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--osdmap", (char*)NULL)) {
       osdmapfn = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--inject_monmap", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--inject_monmap",
+				     (char*)NULL)) {
       inject_monmap = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--extract-monmap", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--extract-monmap",
+				     (char*)NULL)) {
       extract_monmap = val;
     } else {
       ++i;
@@ -293,8 +300,10 @@ int main(int argc, const char **argv)
   }
 
   if (force_sync && !yes_really) {
-    cerr << "are you SURE you want to force a sync?  this will erase local data and may\n"
-	 << "break your mon cluster.  pass --yes-i-really-mean-it if you do." << std::endl;
+    cerr << "are you SURE you want to force a sync?  "
+	 << "this will erase local data and may\n"
+	 << "break your mon cluster.  pass --yes-i-really-mean-it if you do."
+	 << std::endl;
     exit(1);
   }
 
@@ -349,7 +358,8 @@ int main(int argc, const char **argv)
     if (g_conf->monmap.length()) {
       int err = monmapbl.read_file(g_conf->monmap.c_str(), &error);
       if (err < 0) {
-	cerr << argv[0] << ": error reading " << g_conf->monmap << ": " << error << std::endl;
+	cerr << argv[0] << ": error reading " << g_conf->monmap << ": "
+	     << error << std::endl;
 	exit(1);
       }
       try {
@@ -359,13 +369,15 @@ int main(int argc, const char **argv)
 	monmap.set_epoch(0);
       }
       catch (const buffer::error& e) {
-	cerr << argv[0] << ": error decoding monmap " << g_conf->monmap << ": " << e.what() << std::endl;
+	cerr << argv[0] << ": error decoding monmap " << g_conf->monmap
+	     << ": " << e.what() << std::endl;
 	exit(1);
-      }      
+      }
     } else {
       int err = monmap.build_initial(g_ceph_context, cerr);
       if (err < 0) {
-	cerr << argv[0] << ": warning: no initial monitors; must use admin socket to feed hints" << std::endl;
+	cerr << argv[0] << ": warning: no initial monitors; "
+	     << "must use admin socket to feed hints" << std::endl;
       }
 
       // am i part of the initial quorum?
@@ -395,11 +407,13 @@ int main(int argc, const char **argv)
 
 	  if (name.find("noname-") == 0) {
 	    cout << argv[0] << ": mon." << name << " " << local
-		 << " is local, renaming to mon." << g_conf->name.get_id() << std::endl;
+		 << " is local, renaming to mon." << g_conf->name.get_id()
+		 << std::endl;
 	    monmap.rename(name, g_conf->name.get_id());
 	  } else {
 	    cout << argv[0] << ": mon." << name << " " << local
-		 << " is local, but not 'noname-' + something; not assuming it's me" << std::endl;
+		 << " is local, but not 'noname-' + something; "
+		 << "not assuming it's me" << std::endl;
 	  }
 	}
       }
@@ -409,9 +423,10 @@ int main(int argc, const char **argv)
       monmap.fsid = g_conf->fsid;
       cout << argv[0] << ": set fsid to " << g_conf->fsid << std::endl;
     }
-    
+
     if (monmap.fsid.is_zero()) {
-      cerr << argv[0] << ": generated monmap has no fsid; use '--fsid <uuid>'" << std::endl;
+      cerr << argv[0] << ": generated monmap has no fsid; use '--fsid <uuid>'"
+	   << std::endl;
       exit(10);
     }
 
@@ -432,15 +447,17 @@ int main(int argc, const char **argv)
     int r = store.create_and_open(cerr);
     if (r < 0) {
       cerr << argv[0] << ": error opening mon data directory at '"
-           << g_conf->mon_data << "': " << cpp_strerror(r) << std::endl;
+	   << g_conf->mon_data << "': " << cpp_strerror(r) << std::endl;
       exit(1);
     }
     assert(r == 0);
 
-    Monitor mon(g_ceph_context, g_conf->name.get_id(), &store, 0, &monmap);
+    Monitor mon(g_ceph_context, g_conf->name.get_id(), &store, NULL, NULL,
+		&monmap);
     r = mon.mkfs(osdmapbl);
     if (r < 0) {
-      cerr << argv[0] << ": error creating monfs: " << cpp_strerror(r) << std::endl;
+      cerr << argv[0] << ": error creating monfs: " << cpp_strerror(r)
+	   << std::endl;
       exit(1);
     }
     store.close();
@@ -594,9 +611,9 @@ int main(int argc, const char **argv)
     int err = obtain_monmap(*store, mapbl);
     if (err >= 0) {
       try {
-        monmap.decode(mapbl);
+	monmap.decode(mapbl);
       } catch (const buffer::error& e) {
-        cerr << "can't decode monmap: " << e.what() << std::endl;
+	cerr << "can't decode monmap: " << e.what() << std::endl;
       }
     } else {
       derr << "unable to obtain a monmap: " << cpp_strerror(err) << dendl;
@@ -605,7 +622,8 @@ int main(int argc, const char **argv)
       int r = mapbl.write_file(extract_monmap.c_str());
       if (r < 0) {
 	r = -errno;
-	derr << "error writing monmap to " << extract_monmap << ": " << cpp_strerror(r) << dendl;
+	derr << "error writing monmap to " << extract_monmap << ": " <<
+	  cpp_strerror(r) << dendl;
 	prefork.exit(1);
       }
       derr << "wrote monmap to " << extract_monmap << dendl;
@@ -633,7 +651,9 @@ int main(int argc, const char **argv)
       }
     }
   } else {
-    dout(0) << g_conf->name << " does not exist in monmap, will attempt to join an existing cluster" << dendl;
+    dout(0) << g_conf->name <<
+      " does not exist in monmap, will attempt to join an existing cluster"
+	    << dendl;
 
     pick_addresses(g_ceph_context, CEPH_PICK_ADDRESS_PUBLIC);
     if (!g_conf->public_addr.is_blank_ip()) {
@@ -782,7 +802,8 @@ int main(int argc, const char **argv)
   delete daemon_throttler;
   g_ceph_context->put();
 
-  // cd on exit, so that gmon.out (if any) goes into a separate directory for each node.
+  // cd on exit, so that gmon.out (if any) goes into a separate directory
+  // for each node.
   char s[20];
   snprintf(s, sizeof(s), "gmon/%d", getpid());
   if ((mkdir(s, 0755) == 0) && (chdir(s) == 0)) {

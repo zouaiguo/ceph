@@ -69,6 +69,7 @@ private:
   rados_log_callback_t log_cb;
   void *log_cb_arg;
   string log_watch;
+  bool use_xio;
 
   int wait_for_osdmap();
 
@@ -79,6 +80,7 @@ public:
   ~RadosClient();
   int ping_monitor(string mon_id, string *result);
   int connect();
+  int xio_connect();
   void shutdown();
 
   int watch_flush();

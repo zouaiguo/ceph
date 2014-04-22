@@ -359,7 +359,7 @@ private:
 	osdmon->dispatch(op);
       else
 	assert(0 == "bad C_ReplyMap return value");
-    }    
+    }
   };
   struct C_PoolOp : public C_MonOp {
     OSDMonitor *osdmon;

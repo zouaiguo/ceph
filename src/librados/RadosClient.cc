@@ -186,6 +186,12 @@ int librados::RadosClient::ping_monitor(const string mon_id, string *result)
   return err;
 }
 
+int librados::RadosClient::xio_connect()
+{
+  use_xio = true;
+  return connect();
+}
+
 int librados::RadosClient::connect()
 {
   common_init_finish(cct);

@@ -2261,7 +2261,8 @@ bool OSDMonitor::prepare_remove_snaps(MonOpRequestRef op)
 	dout(10) << " pool " << p->first << " removed_snaps added " << *q
 		 << " (now " << newpi->removed_snaps << ")" << dendl;
 	if (*q > newpi->get_snap_seq()) {
-	  dout(10) << " pool " << p->first << " snap_seq " << newpi->get_snap_seq() << " -> " << *q << dendl;
+	  dout(10) << " pool " << p->first << " snap_seq "
+		   << newpi->get_snap_seq() << " -> " << *q << dendl;
 	  newpi->set_snap_seq(*q);
 	}
 	newpi->set_snap_epoch(pending_inc.epoch);
@@ -2456,16 +2457,12 @@ void OSDMonitor::send_incremental(epoch_t first, MonSession *session,
   }
 }
 
-
-
-
 epoch_t OSDMonitor::blacklist(const entity_addr_t& a, utime_t until)
 {
   dout(10) << "blacklist " << a << " until " << until << dendl;
   pending_inc.new_blacklist[a] = until;
   return pending_inc.epoch;
 }
-
 
 void OSDMonitor::check_subs()
 {
@@ -2485,7 +2482,9 @@ void OSDMonitor::check_sub(Subscription *sub)
 {
   dout(10) << __func__ << " " << sub << " next " << sub->next
 	   << (sub->onetime ? " (onetime)":" (ongoing)") << dendl;
+
   if (sub->next <= osdmap.get_epoch()) {
+    Messenger *msgr = sub->session->con->get_messenger();
     if (sub->next >= 1)
       send_incremental(sub->next, sub->session, sub->incremental_onetime);
     else
@@ -2498,7 +2497,6 @@ void OSDMonitor::check_sub(Subscription *sub)
 }
 
 // TICK
-
 
 void OSDMonitor::tick()
 {

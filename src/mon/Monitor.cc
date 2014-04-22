@@ -139,11 +139,12 @@ long parse_pos_long(const char *s, ostream *pss)
 }
 
 Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
-		 Messenger *m, MonMap *map) :
+		 Messenger *m, XioMessenger *xm, MonMap *map) :
   Dispatcher(cct_),
   name(nm),
   rank(-1), 
   messenger(m),
+  xmsgr(xm),
   con_self(m ? m->get_loopback_connection() : NULL),
   lock("Monitor::lock"),
   timer(cct_, lock),
@@ -621,9 +622,11 @@ int Monitor::preinit()
     get_str_list(g_conf->mon_initial_members, initial_members);
 
     if (!initial_members.empty()) {
-      dout(1) << " initial_members " << initial_members << ", filtering seed monmap" << dendl;
+      dout(1) << " initial_members " << initial_members <<
+	", filtering seed monmap" << dendl;
 
-      monmap->set_initial_members(g_ceph_context, initial_members, name, messenger->get_myaddr(),
+      monmap->set_initial_members(g_ceph_context, initial_members, name,
+				  messenger->get_myaddr(),
 				  &extra_probe_peers);
 
       dout(10) << " monmap is " << *monmap << dendl;
@@ -760,6 +763,7 @@ int Monitor::init()
 
   // i'm ready!
   messenger->add_dispatcher_tail(this);
+  xmsgr->add_dispatcher_tail(this);
 
 
   bootstrap();
@@ -896,6 +900,7 @@ void Monitor::shutdown()
   lock.Unlock();
 
   messenger->shutdown();  // last thing!  ceph_mon.cc will delete mon.
+  xmsgr->shutdown();
 }
 
 void Monitor::wait_for_paxos_write()
@@ -1586,11 +1591,12 @@ void Monitor::handle_probe_probe(MonOpRequestRef op)
 
   dout(10) << "handle_probe_probe " << m->get_source_inst() << *m
 	   << " features " << m->get_connection()->get_features() << dendl;
-  uint64_t missing = required_features & ~m->get_connection()->get_features();
+  ConnectionRef con = m->get_connection();
+  uint64_t missing = required_features & ~(con->get_features());
   if (missing) {
     dout(1) << " peer " << m->get_source_addr() << " missing features "
 	    << missing << dendl;
-    if (m->get_connection()->has_feature(CEPH_FEATURE_OSD_PRIMARY_AFFINITY)) {
+    if (con->has_feature(CEPH_FEATURE_OSD_PRIMARY_AFFINITY)) {
       MMonProbe *r = new MMonProbe(monmap->fsid, MMonProbe::OP_MISSING_FEATURES,
 				   name, has_ever_joined);
       m->required_features = required_features;
@@ -1618,7 +1624,7 @@ void Monitor::handle_probe_probe(MonOpRequestRef op)
   r = new MMonProbe(monmap->fsid, MMonProbe::OP_REPLY, name, has_ever_joined);
   r->name = name;
   r->quorum = quorum;
-  monmap->encode(r->monmap_bl, m->get_connection()->get_features());
+  monmap->encode(r->monmap_bl, con->get_features());
   r->paxos_first_version = paxos->get_first_committed();
   r->paxos_last_version = paxos->get_version();
   m->get_connection()->send_message(r);
@@ -3748,7 +3754,6 @@ void Monitor::handle_ping(MonOpRequestRef op)
   MPing *m = static_cast<MPing*>(op->get_req());
   dout(10) << __func__ << " " << *m << dendl;
   MPing *reply = new MPing;
-  entity_inst_t inst = m->get_source_inst();
   bufferlist payload;
   Formatter *f = new JSONFormatter(true);
   f->open_object_section("pong");
@@ -4147,7 +4152,7 @@ void Monitor::handle_subscribe(MonOpRequestRef op)
 {
   MMonSubscribe *m = static_cast<MMonSubscribe*>(op->get_req());
   dout(10) << "handle_subscribe " << *m << dendl;
-  
+
   bool reply = false;
 
   MonSession *s = op->get_session();
@@ -4165,7 +4170,7 @@ void Monitor::handle_subscribe(MonOpRequestRef op)
     if ((p->second.flags & CEPH_SUBSCRIBE_ONETIME) == 0)
       reply = true;
 
-    session_map.add_update_sub(s, p->first, p->second.start, 
+    session_map.add_update_sub(s, p->first, p->second.start,
 			       p->second.flags & CEPH_SUBSCRIBE_ONETIME,
 			       m->get_connection()->has_feature(CEPH_FEATURE_INCSUBOSDMAP));
 
@@ -4730,7 +4735,7 @@ void Monitor::tick()
     
     // don't trim monitors
     if (s->inst.name.is_mon())
-      continue; 
+      continue;
 
     if (!s->until.is_zero() && s->until < now) {
       dout(10) << " trimming session " << s->con << " " << s->inst
