@@ -203,20 +203,20 @@ static simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZER;
     }
   };
 
-  class buffer::raw_malloc : public buffer::raw {
+  class buffer::raw_malloc : public buffer::raw_crc {
   public:
-    raw_malloc(unsigned l) : raw(l) {
+    raw_malloc(unsigned l) : raw_crc(l) {
       if (len) {
 	data = (char *)malloc(len);
-        if (!data)
-          throw bad_alloc();
+	if (!data)
+	  throw bad_alloc();
       } else {
 	data = 0;
       }
       inc_total_alloc(len);
       bdout << "raw_malloc " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
     }
-    raw_malloc(unsigned l, char *b) : raw(b, l) {
+    raw_malloc(unsigned l, char *b) : raw_crc(b, l) {
       inc_total_alloc(len);
       bdout << "raw_malloc " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
     }
@@ -231,9 +231,9 @@ static simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZER;
   };
 
 #ifndef __CYGWIN__
-  class buffer::raw_mmap_pages : public buffer::raw {
+  class buffer::raw_mmap_pages : public buffer::raw_crc {
   public:
-    raw_mmap_pages(unsigned l) : raw(l) {
+    raw_mmap_pages(unsigned l) : raw_crc(l) {
       data = (char*)::mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
       if (!data)
 	throw bad_alloc();
@@ -489,9 +489,9 @@ static simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZER;
   /*
    * primitive buffer types
    */
-  class buffer::raw_char : public buffer::raw {
+  class buffer::raw_char : public buffer::raw_crc {
   public:
-    raw_char(unsigned l) : raw(l) {
+    raw_char(unsigned l) : raw_crc(l) {
       if (len)
 	data = new char[len];
       else
@@ -499,7 +499,7 @@ static simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZER;
       inc_total_alloc(len);
       bdout << "raw_char " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
     }
-    raw_char(unsigned l, char *b) : raw(b, l) {
+    raw_char(unsigned l, char *b) : raw_crc(b, l) {
       inc_total_alloc(len);
       bdout << "raw_char " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
     }
@@ -536,7 +536,7 @@ static simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZER;
 
   class buffer::raw_static : public buffer::raw {
   public:
-    raw_static(const char *d, unsigned l) : raw((char*)d, l) { }
+    raw_static(const char *d, unsigned l) : raw_crc((char*)d, l) { }
     ~raw_static() {}
     raw* clone_empty() {
       return new buffer::raw_char(len);
