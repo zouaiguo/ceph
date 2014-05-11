@@ -453,6 +453,16 @@ int main(int argc, const char **argv)
   ms_xio_objecter->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   ms_xio_objecter->set_port_shift(111);
 
+  XioMessenger *ms_xio_hb = new XioMessenger(
+    g_ceph_context,
+    entity_name_t::OSD(whoami), "xio objecter",
+    getpid(),
+    2 /* portals */,
+    new QueueStrategy(2) /* dispatch strategy */);
+
+  ms_xio_hb->set_cluster_protocol(CEPH_OSD_PROTOCOL);
+  ms_xio_hb->set_port_shift(111);
+
   cout << "starting osd." << whoami
        << " at " << ms_public->get_myaddr()
        << " osd_data " << g_conf->osd_data
@@ -468,7 +478,7 @@ int main(int argc, const char **argv)
 		 g_conf->osd_client_message_cap));
 
   uint64_t supported =
-    CEPH_FEATURE_UID | 
+    CEPH_FEATURE_UID |
     CEPH_FEATURE_NOSRCADDR |
     CEPH_FEATURE_PGID64 |
     CEPH_FEATURE_MSG_AUTH |
@@ -513,6 +523,8 @@ int main(int argc, const char **argv)
 				Messenger::Policy::stateless_server(0, 0));
   ms_hb_front_server->set_policy(entity_name_t::TYPE_OSD,
 				 Messenger::Policy::stateless_server(0, 0));
+  ms_xio_hb->set_policy(entity_name_t::TYPE_OSD,
+			Messenger::Policy::stateless_server(0, 0));
 
   ms_objecter->set_default_policy(Messenger::Policy::lossy_client(0, CEPH_FEATURE_OSDREPLYMUX));
 
