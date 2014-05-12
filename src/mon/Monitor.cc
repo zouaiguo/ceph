@@ -1337,6 +1337,7 @@ void Monitor::handle_sync_get_cookie(MonOpRequestRef op)
   }
   dout(10) << __func__ << " will sync from version " << sp.last_committed << dendl;
 
+  ConnectionRef con = m->get_connection();
   MMonSync *reply = new MMonSync(MMonSync::OP_COOKIE, sp.cookie);
   reply->last_committed = sp.last_committed;
   m->get_connection()->send_message(reply);
@@ -1592,6 +1593,8 @@ void Monitor::handle_probe_probe(MonOpRequestRef op)
   dout(10) << "handle_probe_probe " << m->get_source_inst() << *m
 	   << " features " << m->get_connection()->get_features() << dendl;
   ConnectionRef con = m->get_connection();
+  dout(10) << "handle_probe_probe " << m->get_source_inst() << *m
+	   << " features " << con->get_features() << dendl;
   uint64_t missing = required_features & ~(con->get_features());
   if (missing) {
     dout(1) << " peer " << m->get_source_addr() << " missing features "
@@ -4206,6 +4209,7 @@ void Monitor::handle_get_version(MonOpRequestRef op)
   MMonGetVersion *m = static_cast<MMonGetVersion*>(op->get_req());
   dout(10) << "handle_get_version " << *m << dendl;
   PaxosService *svc = NULL;
+  ConnectionRef con = m->get_connection();
 
   MonSession *s = op->get_session();
   if (!s) {

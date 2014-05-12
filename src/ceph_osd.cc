@@ -453,15 +453,35 @@ int main(int argc, const char **argv)
   ms_xio_objecter->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   ms_xio_objecter->set_port_shift(111);
 
-  XioMessenger *ms_xio_hb = new XioMessenger(
+  XioMessenger *ms_xio_hb_cl = new XioMessenger(
     g_ceph_context,
     entity_name_t::OSD(whoami), "xio objecter",
     getpid(),
     2 /* portals */,
     new QueueStrategy(2) /* dispatch strategy */);
 
-  ms_xio_hb->set_cluster_protocol(CEPH_OSD_PROTOCOL);
-  ms_xio_hb->set_port_shift(111);
+  ms_xio_hb_cl->set_cluster_protocol(CEPH_OSD_PROTOCOL);
+  ms_xio_hb_cl->set_port_shift(111);
+
+  XioMessenger *ms_xio_hb_fs = new XioMessenger(
+    g_ceph_context,
+    entity_name_t::OSD(whoami), "xio objecter",
+    getpid(),
+    2 /* portals */,
+    new QueueStrategy(2) /* dispatch strategy */);
+
+  ms_xio_hb_fs->set_cluster_protocol(CEPH_OSD_PROTOCOL);
+  ms_xio_hb_fs->set_port_shift(111);
+
+  XioMessenger *ms_xio_hb_bs = new XioMessenger(
+    g_ceph_context,
+    entity_name_t::OSD(whoami), "xio objecter",
+    getpid(),
+    2 /* portals */,
+    new QueueStrategy(2) /* dispatch strategy */);
+
+  ms_xio_hb_bs->set_cluster_protocol(CEPH_OSD_PROTOCOL);
+  ms_xio_hb_bs->set_port_shift(111);
 
   cout << "starting osd." << whoami
        << " at " << ms_public->get_myaddr()
@@ -523,8 +543,13 @@ int main(int argc, const char **argv)
 				Messenger::Policy::stateless_server(0, 0));
   ms_hb_front_server->set_policy(entity_name_t::TYPE_OSD,
 				 Messenger::Policy::stateless_server(0, 0));
-  ms_xio_hb->set_policy(entity_name_t::TYPE_OSD,
-			Messenger::Policy::stateless_server(0, 0));
+
+  ms_xio_hb_cl->set_policy(entity_name_t::TYPE_OSD,
+			   Messenger::Policy::lossy_client(0, 0));
+  ms_xio_hb_fs->set_policy(entity_name_t::TYPE_OSD,
+			   Messenger::Policy::stateless_server(0, 0));
+  ms_xio_hb_bs->set_policy(entity_name_t::TYPE_OSD,
+			   Messenger::Policy::stateless_server(0, 0));
 
   ms_objecter->set_default_policy(Messenger::Policy::lossy_client(0, CEPH_FEATURE_OSDREPLYMUX));
 
