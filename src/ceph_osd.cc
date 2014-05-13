@@ -32,8 +32,10 @@ using namespace std;
 #include "mon/MonMap.h"
 
 #include "msg/Messenger.h"
+#if defined(HAVE_XIO)
 #include "msg/XioMessenger.h"
 #include "msg/QueueStrategy.h"
+#endif
 
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
@@ -433,6 +435,7 @@ int main(int argc, const char **argv)
   ms_hb_back_server->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   ms_hb_front_server->set_cluster_protocol(CEPH_OSD_PROTOCOL);
 
+#if defined(HAVE_XIO)
   XioMessenger *ms_xio_public = new XioMessenger(
     g_ceph_context,
     entity_name_t::OSD(whoami), "xio client",
@@ -442,6 +445,16 @@ int main(int argc, const char **argv)
 
   ms_xio_public->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   ms_xio_public->set_port_shift(111);
+
+  XioMessenger *ms_xio_cluster = new XioMessenger(
+    g_ceph_context,
+    entity_name_t::OSD(whoami), "xio cluster",
+    getpid(),
+    2 /* portals */,
+    new QueueStrategy(2) /* dispatch strategy */);
+
+  ms_xio_cluster->set_cluster_protocol(CEPH_OSD_PROTOCOL);
+  ms_xio_cluster->set_port_shift(111);
 
   XioMessenger *ms_xio_objecter = new XioMessenger(
     g_ceph_context,
@@ -482,6 +495,7 @@ int main(int argc, const char **argv)
 
   ms_xio_hb_bs->set_cluster_protocol(CEPH_OSD_PROTOCOL);
   ms_xio_hb_bs->set_port_shift(111);
+#endif /* HAVE_XIO */
 
   cout << "starting osd." << whoami
        << " at " << ms_public->get_myaddr()
@@ -623,8 +637,15 @@ int main(int argc, const char **argv)
   ms_hb_back_server->start();
   ms_cluster->start();
   ms_objecter->start();
+
+#if defined(HAVE_XIO)
   ms_xio_public->start();
+  ms_xio_hb_cl->start();
+  ms_xio_hb_fs->start();
+  ms_xio_hb_bs->start();
+  ms_xio_cluster->start();
   ms_xio_objecter->start();
+#endif
 
   // start osd
   err = osd->init();
@@ -651,8 +672,15 @@ int main(int argc, const char **argv)
   ms_hb_back_server->wait();
   ms_cluster->wait();
   ms_objecter->wait();
+
+#if defined(HAVE_XIO)
   ms_xio_public->wait();
+  ms_xio_hb_cl->wait();
+  ms_xio_hb_fs->wait();
+  ms_xio_hb_bs->wait();
+  ms_xio_cluster->wait();
   ms_xio_objecter->wait();
+#endif
 
   unregister_async_signal_handler(SIGHUP, sighup_handler);
   unregister_async_signal_handler(SIGINT, handle_osd_signal);
