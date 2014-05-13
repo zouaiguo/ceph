@@ -17,6 +17,11 @@
 #include <string.h>
 #include <string>
 
+#if defined(HAVE_XIO)
+#include "msg/XioMessenger.h"
+#include "msg/QueueStrategy.h"
+#endif
+
 #include "auth/Crypto.h"
 #include "client/Client.h"
 #include "include/cephfs/libcephfs.h"
@@ -35,7 +40,8 @@ struct ceph_mount_info
 {
 public:
   ceph_mount_info(uint64_t msgr_nonce_, CephContext *cct_)
-    : msgr_nonce(msgr_nonce_),
+    : xio(false),
+      msgr_nonce(msgr_nonce_),
       mounted(false),
       inited(false),
       client(NULL),
@@ -233,6 +239,7 @@ public:
   }
 
 private:
+  bool xio;
   uint64_t msgr_nonce;
   bool mounted;
   bool inited;
