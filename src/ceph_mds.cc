@@ -22,13 +22,17 @@ using namespace std;
 
 #include "include/ceph_features.h"
 
+#include "msg/Messenger.h"
+#if defined(HAVE_XIO)
+#include "msg/XioMessenger.h"
+#include "msg/QueueStrategy.h"
+#endif
+
 #include "common/config.h"
 #include "common/strtol.h"
 
 #include "mon/MonMap.h"
 #include "mds/MDS.h"
-
-#include "msg/Messenger.h"
 
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
@@ -185,6 +189,23 @@ int main(int argc, const char **argv)
   int r = msgr->bind(g_conf->public_addr);
   if (r < 0)
     exit(1);
+
+#if defined(HAVE_XIO)
+  xmsgr->set_default_policy(Messenger::Policy::lossy_client(supported, required));
+  xmsgr->set_policy(entity_name_t::TYPE_MON,
+		    Messenger::Policy::lossy_client(supported,
+						    CEPH_FEATURE_UID |
+						    CEPH_FEATURE_PGID64));
+  xmsgr->set_policy(entity_name_t::TYPE_MDS,
+		    Messenger::Policy::lossless_peer(supported,
+						     CEPH_FEATURE_UID));
+  xmsgr->set_policy(entity_name_t::TYPE_CLIENT,
+		    Messenger::Policy::stateful_server(supported, 0));
+
+  r = xmsgr->bind(g_conf->public_addr);
+  if (r < 0)
+    exit(1);
+#endif
 
   if (shadow != MDSMap::STATE_ONESHOT_REPLAY)
     global_init_daemonize(g_ceph_context, 0);
