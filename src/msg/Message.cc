@@ -786,10 +786,10 @@ void encode_message(Message *msg, uint64_t features, bufferlist& payload)
   // Here's where we switch to the old footer format.  PLR
 
   footer = msg->get_footer();
-  old_footer.front_crc = footer.front_crc;   
-  old_footer.middle_crc = footer.middle_crc;   
-  old_footer.data_crc = footer.data_crc;   
-  old_footer.flags = footer.flags;   
+  old_footer.front_crc = footer.front_crc;
+  old_footer.middle_crc = footer.middle_crc;
+  old_footer.data_crc = footer.data_crc;
+  old_footer.flags = footer.flags;
   ::encode(old_footer, payload);
 
   ::encode(msg->get_payload(), payload);
