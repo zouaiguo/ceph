@@ -644,6 +644,9 @@ install(PROGRAMS
   ${CMAKE_SOURCE_DIR}/src/vstart.sh
   ${CMAKE_SOURCE_DIR}/src/ceph-clsinfo
   DESTINATION bin)
+install(FILES
+  ${CMAKE_SOURCE_DIR}/doc/start/ceph.conf
+  DESTINATION ${sysconfdir}/ceph/ RENAME ceph.conf.example)
 
 install(FILES
   ${CMAKE_SOURCE_DIR}/doc/start/ceph.conf
