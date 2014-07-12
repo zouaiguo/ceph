@@ -191,6 +191,7 @@ public:
 
   string decode(bufferlist bl, uint64_t seek) {
     bufferlist::iterator p = bl.begin();
+    int crcflags = MSG_CRC_DATA | MSG_CRC_REST;
     p.seek(seek);
     try {
       Message *n = decode_message(g_ceph_context, 0, p);

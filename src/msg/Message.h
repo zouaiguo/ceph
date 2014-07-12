@@ -172,6 +172,9 @@
 // Xio Testing
 #define MSG_DATA_PING		  0x602
 
+// *** Message::encode() crcflags bits.
+#define MSG_CRC_DATA		1
+#define MSG_CRC_REST		2
 
 // ======================================================
 
