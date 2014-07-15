@@ -2051,7 +2051,7 @@ int Pipe::read_message(Message **pm, AuthSessionHandler* auth_handler)
     ceph_msg_footer_old old_footer;
     if (tcp_read((char*)&old_footer, sizeof(old_footer)) < 0)
       goto out_dethrottle;
-    if (msgr->crcflags & MSG_CRC_REST) {
+    if (msgr->crcflags & MSG_CRC_HEADER) {
       footer.front_crc = old_footer.front_crc;
       footer.middle_crc = old_footer.middle_crc;
       footer.data_crc = old_footer.data_crc;
