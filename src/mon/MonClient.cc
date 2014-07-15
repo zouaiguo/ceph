@@ -493,6 +493,7 @@ int MonClient::authenticate(double timeout)
 
 void MonClient::handle_auth(MAuthReply *m)
 {
+  ldout(cct, 5) << "handle_auth " << *m << dendl;
   Context *cb = NULL;
   bufferlist::iterator p = m->result_bl.begin();
   if (state == MC_STATE_NEGOTIATING) {
@@ -579,7 +580,7 @@ void MonClient::_send_mon_message(Message *m, bool force)
   assert(!cur_mon.empty());
   if (force || state == MC_STATE_HAVE_SESSION) {
     assert(cur_con);
-    ldout(cct, 10) << "_send_mon_message to mon." << cur_mon
+    ldout(cct, 10) << "_send_mon_message " << *m <<  " to mon." << cur_mon
 		   << " at " << cur_con->get_peer_addr() << dendl;
     cur_con->send_message(m);
   } else {
