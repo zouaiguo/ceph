@@ -125,6 +125,7 @@ target_link_libraries(dencoder
   global
   osd
   mds
+  osdc
   mon
   osdc
   cls_lock_client

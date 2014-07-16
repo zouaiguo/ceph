@@ -288,7 +288,7 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c
   APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/include/ceph_ver.h)
 
 if(${WITH_PROFILER})
-  target_link_libraries(common profiler)
+  target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
 add_library(common_utf8 STATIC common/utf8.c)
@@ -304,7 +304,7 @@ set(global_common_files
 add_library(global_common_objs OBJECT ${global_common_files})
 add_library(global STATIC ${libglobal_srcs}
   $<TARGET_OBJECTS:global_common_objs>)
-target_link_libraries(global common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS}
+target_link_libraries(global PRIVATE common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS}
   ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(global PROPERTIES
@@ -480,9 +480,9 @@ set(os_mon_files
 add_library(os_mon_objs OBJECT ${os_mon_files})
 add_library(os STATIC ${libos_srcs} $<TARGET_OBJECTS:os_mon_objs>)
 if(${HAVE_LIBAIO})
-  target_link_libraries(os aio)
+  target_link_libraries(os PRIVATE aio)
 endif(${HAVE_LIBAIO})
-target_link_libraries(os leveldb snappy)
+target_link_libraries(os PRIVATE leveldb snappy)
 
 set(cls_references_files objclass/class_api.cc)
 add_library(cls_references_objs OBJECT ${cls_references_files})
@@ -519,7 +519,7 @@ set(osd_mon_files
 add_library(osd_mon_objs OBJECT ${osd_mon_files})
 add_library(osd STATIC ${osd_srcs} $<TARGET_OBJECTS:osd_mon_objs>
   $<TARGET_OBJECTS:cls_references_objs>)
-target_link_libraries(osd dl leveldb)
+target_link_libraries(osd PRIVATE common dl leveldb)
 
 set(ceph_osd_srcs
   ceph_osd.cc
@@ -681,7 +681,7 @@ if(WITH_LIBCEPHFS)
   target_link_libraries(client osdc mds ${LIBEDIT_LIBS})
   set(libcephfs_srcs libcephfs.cc)
   add_library(cephfs SHARED ${libcephfs_srcs})
-  target_link_libraries(cephfs client global)
+  target_link_libraries(cephfs PRIVATE client global)
   install(TARGETS cephfs DESTINATION lib)
   install(DIRECTORY
     "${CMAKE_SOURCE_DIR}/src/include/cephfs"
