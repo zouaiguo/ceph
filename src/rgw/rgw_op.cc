@@ -1762,6 +1762,36 @@ static int get_system_versioning_params(req_state *s, uint64_t *olh_epoch, strin
   return 0;
 }
 
+static int put_data_and_throttle(RGWPutObjProcessor *processor, bufferlist& data, off_t ofs,
+                                 MD5 *hash, bool need_to_wait)
+{
+  const unsigned char *data_ptr = (hash ? (const unsigned char *)data.c_str() : NULL);
+  bool again;
+  uint64_t len = data.length();
+
+  do {
+    void *handle;
+
+    int ret = processor->handle_data(data, ofs, &handle, &again);
+    if (ret < 0)
+      return ret;
+
+    if (hash) {
+      hash->Update(data_ptr, len);
+      hash = NULL; /* only calculate hash once */
+    }
+
+    ret = processor->throttle_data(handle, false);
+    if (ret < 0)
+      return ret;
+
+    need_to_wait = false; /* the need to wait only applies to the first iteration */
+  } while (again);
+
+  return 0;
+}
+
+
 void RGWPutObj::execute()
 {
   RGWPutObjProcessor *processor = NULL;
