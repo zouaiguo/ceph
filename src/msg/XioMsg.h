@@ -281,7 +281,7 @@ class XioCompletionHook : public Message::CompletionHook
 {
 private:
   XioConnection *xcon;
-  list <struct xio_msg *> msg_seq;
+  XioInSeq msg_seq;
   XioPool rsp_pool;
   atomic_t nrefs;
   bool cl_flag;
@@ -290,8 +290,7 @@ private:
 public:
   struct xio_mempool_obj mp_this;
 
-  XioCompletionHook(XioConnection *_xcon, Message *_m,
-		    list <struct xio_msg *>& _msg_seq,
+  XioCompletionHook(XioConnection *_xcon, Message *_m, XioInSeq& _msg_seq,
 		    struct xio_mempool_obj& _mp) :
     CompletionHook(_m),
     xcon(_xcon->get()),
@@ -335,7 +334,7 @@ public:
 
   XioConnection* get_xcon() { return xcon; }
 
-  list <struct xio_msg *>& get_seq() { return msg_seq; }
+  XioInSeq& get_seq() { return msg_seq; }
 
   void claim(int r) {}
 
@@ -359,6 +358,10 @@ public:
       // submit queue ref
       xcon->get();
     };
+
+  struct xio_msg* dequeue() {
+    return xhook->get_seq().dequeue();
+  }
 
   XioCompletionHook *get_xhook() { return xhook; }
 
