@@ -1057,7 +1057,6 @@ namespace librados
     int init_with_context(config_t cct_);
     config_t cct();
     int connect();
-    int xio_connect();
     void shutdown();
     int watch_flush();
     int conf_read_file(const char * const path) const;

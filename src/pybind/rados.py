@@ -480,8 +480,7 @@ Rados object in state %s." % self.state)
         Connect to the cluster.  Use shutdown() to release resources.
         """
         self.require_state("configuring")
-        ret = run_in_thread(self.librados.rados_xio_connect
-                            if self.use_xio_flag else self.librados.rados_connect,
+        ret = run_in_thread(self.librados.rados_connect,
                             (self.cluster,),
                             timeout)
         if (ret != 0):

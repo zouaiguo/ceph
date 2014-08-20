@@ -1871,11 +1871,6 @@ int librados::Rados::connect()
   return client->connect();
 }
 
-int librados::Rados::xio_connect()
-{
-  return client->xio_connect();
-}
-
 librados::config_t librados::Rados::cct()
 {
   return (config_t)client->cct;
@@ -2257,12 +2252,6 @@ extern "C" int rados_connect(rados_t cluster)
   int retval = client->connect();
   tracepoint(librados, rados_connect_exit, retval);
   return retval;
-}
-
-extern "C" int rados_xio_connect(rados_t cluster)
-{
-  librados::RadosClient *client = (librados::RadosClient *)cluster;
-  return client->xio_connect();
 }
 
 extern "C" void rados_shutdown(rados_t cluster)

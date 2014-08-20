@@ -1370,10 +1370,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
      goto out;
   }
 
-  if (opts.count("xio"))
-    ret = rados.xio_connect();
-  else
-    ret = rados.connect();
+  ret = rados.connect();
   if (ret) {
      cerr << "couldn't connect to cluster: " << cpp_strerror(ret) << std::endl;
      ret = -1;
