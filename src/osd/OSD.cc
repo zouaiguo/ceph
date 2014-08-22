@@ -5769,10 +5769,6 @@ void OSD::_dispatch(Message *m)
     // -- don't need lock --
   case CEPH_MSG_PING:
     dout(10) << "ping from " << m->get_source() << dendl;
-
-    /* XXX kill me */
-    cout << "ping from " << m->get_source() << std::endl;
-
     m->put();
     break;
 
