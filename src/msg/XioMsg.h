@@ -235,6 +235,8 @@ public:
 	alloc_trailers(_ex_cnt);
       }
 
+      xpool_inc_msgcnt();
+
       // submit queue ref
       xcon->get();
     }
@@ -291,6 +293,9 @@ public:
 	  /* the normal case: done with message */
 	  m->put();
       }
+
+      xpool_dec_msgcnt();
+
       /* submit queue ref */
       xcon->put();
     }
@@ -318,7 +323,7 @@ public:
     nrefs(1),
     cl_flag(false),
     mp_this(_mp)
-    {}
+    { xpool_inc_hookcnt(); }
 
   virtual void finish(int r) {
     this->put();
@@ -369,6 +374,7 @@ public:
   }
 
   ~XioCompletionHook() {
+    xpool_dec_hookcnt();
     xcon->put();
   }
 };
