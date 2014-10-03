@@ -85,7 +85,7 @@ endif
 
 if LINUX
 libcommon_internal_la_SOURCES += \
-	common/linux_version.c 
+	common/linux_version.c
 endif
 
 if SOLARIS
@@ -159,7 +159,8 @@ LIBCOMMON_DEPS += \
 	$(LIBERASURE_CODE) \
 	$(LIBMSG) $(LIBAUTH) \
 	$(LIBCRUSH) $(LIBJSON_SPIRIT) $(LIBLOG) $(LIBARCH) \
-	$(BOOST_RANDOM_LIBS)
+	$(BOOST_RANDOM_LIBS) \
+	-luuid
 
 if LINUX
 LIBCOMMON_DEPS += -lrt -lblkid
