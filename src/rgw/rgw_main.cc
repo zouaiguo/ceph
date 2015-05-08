@@ -59,7 +59,7 @@
 #include "rgw_loadgen.h"
 #include "rgw_civetweb.h"
 #include "rgw_civetweb_log.h"
-
+#include "rgw_request.h"
 #include "civetweb/civetweb.h"
 
 #include <map>
@@ -86,51 +86,6 @@ static void signal_shutdown();
 
 
 #define SOCKET_BACKLOG 1024
-
-struct RGWRequest
-{
-  uint64_t id;
-  struct req_state *s;
-  string req_str;
-  RGWOp *op;
-  utime_t ts;
-
-  RGWRequest(uint64_t id) : id(id), s(NULL), op(NULL) {
-  }
-
-  virtual ~RGWRequest() {}
-
-  void init_state(req_state *_s) {
-    s = _s;
-  }
-
-  void log_format(struct req_state *s, const char *fmt, ...)
-  {
-#define LARGE_SIZE 1024
-    char buf[LARGE_SIZE];
-    va_list ap;
-
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-
-    log(s, buf);
-  }
-
-  void log_init() {
-    ts = ceph_clock_now(g_ceph_context);
-  }
-
-  void log(struct req_state *s, const char *msg) {
-    if (s->info.method && req_str.size() == 0) {
-      req_str = s->info.method;
-      req_str.append(" ");
-      req_str.append(s->info.request_uri);
-    }
-    utime_t t = ceph_clock_now(g_ceph_context) - ts;
-    dout(2) << "req " << id << ":" << t << ":" << s->dialect << ":" << req_str << ":" << (op ? op->name() : "") << ":" << msg << dendl;
-  }
-};
 
 class RGWFrontendConfig {
   string config;
@@ -704,7 +659,6 @@ void RGWLoadGenProcess::handle_request(RGWRequest *r)
 
   delete req;
 }
-
 
 static int civetweb_callback(struct mg_connection *conn) {
   struct mg_request_info *req_info = mg_get_request_info(conn);

@@ -749,7 +749,9 @@ if(${WITH_RADOSGW})
     rgw/rgw_replica_log.cc
     rgw/rgw_keystone.cc
     rgw/rgw_quota.cc
-    rgw/rgw_dencoder.cc)
+    rgw/rgw_dencoder.cc
+    rgw/rgw_request.cc
+    )
 
   add_library(rgw_a STATIC ${rgw_a_srcs})
 
