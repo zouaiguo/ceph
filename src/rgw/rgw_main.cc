@@ -60,6 +60,7 @@
 #include "rgw_civetweb.h"
 #include "rgw_civetweb_log.h"
 #include "rgw_request.h"
+#include "rgw_process.h"
 #include "civetweb/civetweb.h"
 
 #include <map>
@@ -87,27 +88,6 @@ static void signal_shutdown();
 
 #define SOCKET_BACKLOG 1024
 
-class RGWFrontendConfig {
-  string config;
-  map<string, string> config_map;
-  int parse_config(const string& config, map<string, string>& config_map);
-  string framework;
-public:
-  RGWFrontendConfig(const string& _conf) : config(_conf) {}
-  int init() {
-    int ret = parse_config(config, config_map);
-    if (ret < 0)
-      return ret;
-    return 0;
-  }
-  bool get_val(const string& key, const string& def_val, string *out);
-  bool get_val(const string& key, int def_val, int *out);
-
-  map<string, string>& get_config_map() { return config_map; }
-
-  string get_framework() { return framework; }
-};
-
 
 struct RGWFCGXRequest : public RGWRequest {
   FCGX_Request *fcgx;
@@ -120,98 +100,6 @@ struct RGWFCGXRequest : public RGWRequest {
   ~RGWFCGXRequest() {
     FCGX_Finish_r(fcgx);
     qr->enqueue(fcgx);
-  }
-};
-
-struct RGWProcessEnv {
-  RGWRados *store;
-  RGWREST *rest;
-  OpsLogSocket *olog;
-  int port;
-};
-
-class RGWProcess {
-  deque<RGWRequest *> m_req_queue;
-protected:
-  RGWRados *store;
-  OpsLogSocket *olog;
-  ThreadPool m_tp;
-  Throttle req_throttle;
-  RGWREST *rest;
-  RGWFrontendConfig *conf;
-  int sock_fd;
-
-  struct RGWWQ : public ThreadPool::WorkQueue<RGWRequest> {
-    RGWProcess *process;
-    RGWWQ(RGWProcess *p, time_t timeout, time_t suicide_timeout, ThreadPool *tp)
-      : ThreadPool::WorkQueue<RGWRequest>("RGWWQ", timeout, suicide_timeout, tp), process(p) {}
-
-    bool _enqueue(RGWRequest *req) {
-      process->m_req_queue.push_back(req);
-      perfcounter->inc(l_rgw_qlen);
-      dout(20) << "enqueued request req=" << hex << req << dec << dendl;
-      _dump_queue();
-      return true;
-    }
-    void _dequeue(RGWRequest *req) {
-      assert(0);
-    }
-    bool _empty() {
-      return process->m_req_queue.empty();
-    }
-    RGWRequest *_dequeue() {
-      if (process->m_req_queue.empty())
-	return NULL;
-      RGWRequest *req = process->m_req_queue.front();
-      process->m_req_queue.pop_front();
-      dout(20) << "dequeued request req=" << hex << req << dec << dendl;
-      _dump_queue();
-      perfcounter->inc(l_rgw_qlen, -1);
-      return req;
-    }
-    void _process(RGWRequest *req) {
-      perfcounter->inc(l_rgw_qactive);
-      process->handle_request(req);
-      process->req_throttle.put(1);
-      perfcounter->inc(l_rgw_qactive, -1);
-    }
-    void _dump_queue() {
-      if (!g_conf->subsys.should_gather(ceph_subsys_rgw, 20)) {
-        return;
-      }
-      deque<RGWRequest *>::iterator iter;
-      if (process->m_req_queue.empty()) {
-        dout(20) << "RGWWQ: empty" << dendl;
-        return;
-      }
-      dout(20) << "RGWWQ:" << dendl;
-      for (iter = process->m_req_queue.begin(); iter != process->m_req_queue.end(); ++iter) {
-        dout(20) << "req: " << hex << *iter << dec << dendl;
-      }
-    }
-    void _clear() {
-      assert(process->m_req_queue.empty());
-    }
-  } req_wq;
-
-public:
-  RGWProcess(CephContext *cct, RGWProcessEnv *pe, int num_threads, RGWFrontendConfig *_conf)
-    : store(pe->store), olog(pe->olog), m_tp(cct, "RGWProcess::m_tp", num_threads),
-      req_throttle(cct, "rgw_ops", num_threads * 2),
-      rest(pe->rest),
-      conf(_conf),
-      sock_fd(-1),
-      req_wq(this, g_conf->rgw_op_thread_timeout,
-	     g_conf->rgw_op_thread_suicide_timeout, &m_tp) {}
-  virtual ~RGWProcess() {}
-  virtual void run() = 0;
-  virtual void handle_request(RGWRequest *req) = 0;
-
-  void close_fd() {
-    if (sock_fd >= 0) {
-      ::close(sock_fd);
-      sock_fd = -1;
-    }
   }
 };
 
@@ -489,128 +377,6 @@ static void godown_alarm(int signum)
   _exit(0);
 }
 
-static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWClientIO *client_io, OpsLogSocket *olog)
-{
-  int ret = 0;
-
-  client_io->init(g_ceph_context);
-
-  req->log_init();
-
-  dout(1) << "====== starting new request req=" << hex << req << dec << " =====" << dendl;
-  perfcounter->inc(l_rgw_req);
-
-  RGWEnv& rgw_env = client_io->get_env();
-
-  struct req_state rstate(g_ceph_context, &rgw_env);
-
-  struct req_state *s = &rstate;
-
-  RGWObjectCtx rados_ctx(store, s);
-  s->obj_ctx = &rados_ctx;
-
-  s->req_id = store->unique_id(req->id);
-
-  req->log(s, "initializing");
-
-  RGWOp *op = NULL;
-  int init_error = 0;
-  bool should_log = false;
-  RGWRESTMgr *mgr;
-  RGWHandler *handler = rest->get_handler(store, s, client_io, &mgr, &init_error);
-  if (init_error != 0) {
-    abort_early(s, NULL, init_error);
-    goto done;
-  }
-
-  should_log = mgr->get_logging();
-
-  req->log(s, "getting op");
-  op = handler->get_op(store);
-  if (!op) {
-    abort_early(s, NULL, -ERR_METHOD_NOT_ALLOWED);
-    goto done;
-  }
-  req->op = op;
-
-  req->log(s, "authorizing");
-  ret = handler->authorize();
-  if (ret < 0) {
-    dout(10) << "failed to authorize request" << dendl;
-    abort_early(s, op, ret);
-    goto done;
-  }
-
-  if (s->user.suspended) {
-    dout(10) << "user is suspended, uid=" << s->user.user_id << dendl;
-    abort_early(s, op, -ERR_USER_SUSPENDED);
-    goto done;
-  }
-  req->log(s, "reading permissions");
-  ret = handler->read_permissions(op);
-  if (ret < 0) {
-    abort_early(s, op, ret);
-    goto done;
-  }
-
-  req->log(s, "init op");
-  ret = op->init_processing();
-  if (ret < 0) {
-    abort_early(s, op, ret);
-    goto done;
-  }
-
-  req->log(s, "verifying op mask");
-  ret = op->verify_op_mask();
-  if (ret < 0) {
-    abort_early(s, op, ret);
-    goto done;
-  }
-
-  req->log(s, "verifying op permissions");
-  ret = op->verify_permission();
-  if (ret < 0) {
-    if (s->system_request) {
-      dout(2) << "overriding permissions due to system operation" << dendl;
-    } else {
-      abort_early(s, op, ret);
-      goto done;
-    }
-  }
-
-  req->log(s, "verifying op params");
-  ret = op->verify_params();
-  if (ret < 0) {
-    abort_early(s, op, ret);
-    goto done;
-  }
-
-  req->log(s, "executing");
-  op->pre_exec();
-  op->execute();
-  op->complete();
-done:
-  int r = client_io->complete_request();
-  if (r < 0) {
-    dout(0) << "ERROR: client_io->complete_request() returned " << r << dendl;
-  }
-  if (should_log) {
-    rgw_log_op(store, s, (op ? op->name() : "unknown"), olog);
-  }
-
-  int http_ret = s->err.http_ret;
-
-  req->log_format(s, "http status=%d", http_ret);
-
-  if (handler)
-    handler->put_op(op);
-  rest->put_handler(handler);
-
-  dout(1) << "====== req done req=" << hex << req << dec << " http_status=" << http_ret << " ======" << dendl;
-
-  return (ret < 0 ? ret : s->err.ret);
-}
-
 void RGWFCGXProcess::handle_request(RGWRequest *r)
 {
   RGWFCGXRequest *req = static_cast<RGWFCGXRequest *>(r);
@@ -793,61 +559,6 @@ bool RGWFrontendConfig::get_val(const string& key, int def_val, int *out)
   }
   return 0;
 }
-
-class RGWFrontend {
-public:
-  virtual ~RGWFrontend() {}
-
-  virtual int init() = 0;
-
-  virtual int run() = 0;
-  virtual void stop() = 0;
-  virtual void join() = 0;
-};
-
-class RGWProcessControlThread : public Thread {
-  RGWProcess *pprocess;
-public:
-  RGWProcessControlThread(RGWProcess *_pprocess) : pprocess(_pprocess) {}
-
-  void *entry() {
-    pprocess->run();
-    return NULL;
-  }
-};
-
-class RGWProcessFrontend : public RGWFrontend {
-protected:
-  RGWFrontendConfig *conf;
-  RGWProcess *pprocess;
-  RGWProcessEnv env;
-  RGWProcessControlThread *thread;
-
-public:
-  RGWProcessFrontend(RGWProcessEnv& pe, RGWFrontendConfig *_conf) : conf(_conf), pprocess(NULL), env(pe), thread(NULL) {
-  }
-
-  ~RGWProcessFrontend() {
-    delete thread;
-    delete pprocess;
-  }
-
-  int run() {
-    assert(pprocess); /* should have initialized by init() */
-    thread = new RGWProcessControlThread(pprocess);
-    thread->create();
-    return 0;
-  }
-
-  void stop() {
-    pprocess->close_fd();
-    thread->kill(SIGUSR1);
-  }
-
-  void join() {
-    thread->join();
-  }
-};
 
 class RGWFCGXFrontend : public RGWProcessFrontend {
 public:
