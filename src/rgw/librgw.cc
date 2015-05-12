@@ -169,10 +169,10 @@ struct RGWLibRequest : public RGWRequest {
   string method;
   string resource;
   int content_length;
-  atomic_t *fail_flag;
+  bool user_command;
 
   RGWLibRequest(uint64_t req_id, const string& _m, const  string& _r, int _cl,
-                    atomic_t *ff) : RGWRequest(req_id), method(_m), resource(_r), content_length(_cl), fail_flag(ff) {}
+                    bool _uc) : RGWRequest(req_id), method(_m), resource(_r), content_length(_cl), user_command(_uc) {}
 };
 
 void RGWLibRequestEnv::set_date(utime_t& tm)
@@ -214,7 +214,7 @@ public:
   void run();
   void checkpoint();
   void handle_request(RGWRequest *req);
-  void gen_request(const string& method, const string& resource, int content_length, atomic_t *fail_flag);
+  void gen_request(const string& method, const string& resource, int content_length, bool user_command);
   void set_access_key(RGWAccessKey& key) { access_key = key; }
 };
 
@@ -227,16 +227,15 @@ void RGWLibProcess::run()
 {
 }
 
-void RGWLibProcess::gen_request(const string& method, const string& resource, int content_length, atomic_t *fail_flag)
+void RGWLibProcess::gen_request(const string& method, const string& resource, int content_length,
+				bool user_command)
 {
   RGWLibRequest *req = new RGWLibRequest(store->get_new_req_id(), method, resource,
-					 content_length, fail_flag);
+					 content_length, user_command);
   dout(10) << "allocated request req=" << hex << req << dec << dendl;
   req_throttle.get(1);
   req_wq.queue(req);
 }
-
-extern int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWClientIO *client_io, OpsLogSocket *olog);
 
 void RGWLibProcess::handle_request(RGWRequest *r)
 {
@@ -251,6 +250,7 @@ void RGWLibProcess::handle_request(RGWRequest *r)
   env.content_type = "binary/octet-stream"; /* TBD */
   env.request_method = req->method;
   env.uri = req->resource;
+  env.user_command = req->user_command;
   env.set_date(tm);
   env.sign(access_key);
 
@@ -261,9 +261,6 @@ void RGWLibProcess::handle_request(RGWRequest *r)
     /* we don't really care about return code */
     dout(20) << "process_request() returned " << ret << dendl;
 
-    if (req->fail_flag) {
-      req->fail_flag->inc();
-    }
   }
     delete req;
 }
@@ -461,7 +458,7 @@ int RGWLibIO::send_content_length(uint64_t len)
   
 int RGWLib::get_userinfo_by_uid(const string& uid, RGWUserInfo &info)
 {
-  
+//  fe->gen_request()
 }
 
 int RGWLib::get_user_acl()
