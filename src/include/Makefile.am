@@ -113,4 +113,6 @@ noinst_HEADERS += \
 	include/rados/memory.h \
 	include/hash_namespace.h \
 	include/unordered_set.h \
-	include/unordered_map.h
+	include/unordered_map.h \
+	include/rados/rgw_file.h
+
