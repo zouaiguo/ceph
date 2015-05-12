@@ -169,10 +169,13 @@ struct RGWLibRequest : public RGWRequest {
   string method;
   string resource;
   int content_length;
-  bool user_command;
+  atomic_t *fail_flag;
 
-  RGWLibRequest(uint64_t req_id, const string& _m, const  string& _r, int _cl,
-                    bool _uc) : RGWRequest(req_id), method(_m), resource(_r), content_length(_cl), user_command(_uc) {}
+  RGWLibRequest(uint64_t req_id, const string& _m, const  string& _r, int _cl, bool user_command,
+		atomic_t *_ff) :  RGWRequest(req_id), method(_m), resource(_r), content_length(_cl), fail_flag(_ff)
+  {
+     s->librgw_user_command =  user_command;
+  }
 };
 
 void RGWLibRequestEnv::set_date(utime_t& tm)
@@ -214,13 +217,15 @@ public:
   void run();
   void checkpoint();
   void handle_request(RGWRequest *req);
-  void gen_request(const string& method, const string& resource, int content_length, bool user_command);
+  void gen_request(const string& method, const string& resource, int content_length, bool user_command,
+		   atomic_t *fail_flag);
   void set_access_key(RGWAccessKey& key) { access_key = key; }
 };
 
 
 void RGWLibProcess::checkpoint()
 {
+    m_tp.drain(&req_wq);
 }
 
 void RGWLibProcess::run()
@@ -228,10 +233,10 @@ void RGWLibProcess::run()
 }
 
 void RGWLibProcess::gen_request(const string& method, const string& resource, int content_length,
-				bool user_command)
+				bool user_command, atomic_t *fail_flag)
 {
   RGWLibRequest *req = new RGWLibRequest(store->get_new_req_id(), method, resource,
-					 content_length, user_command);
+					 content_length, user_command, fail_flag);
   dout(10) << "allocated request req=" << hex << req << dec << dendl;
   req_throttle.get(1);
   req_wq.queue(req);
@@ -250,7 +255,6 @@ void RGWLibProcess::handle_request(RGWRequest *r)
   env.content_type = "binary/octet-stream"; /* TBD */
   env.request_method = req->method;
   env.uri = req->resource;
-  env.user_command = req->user_command;
   env.set_date(tm);
   env.sign(access_key);
 
@@ -265,10 +269,16 @@ void RGWLibProcess::handle_request(RGWRequest *r)
     delete req;
 }
 
+void RGWLibFrontend::gen_request(const string& method, const string& resource, int content_length,
+				 bool user_command, atomic_t *fail_flag)
+{
+     RGWLibProcess *lib_process = static_cast<RGWLibProcess *>(pprocess);
+     lib_process->gen_request(method, resource, content_length, user_command, fail_flag);
+}
+
 int RGWLib::init()
 {
   int r = 0;
-
   /* alternative default for module */
   vector<const char *> def_args;
   def_args.push_back("--debug-rgw=1/5");
@@ -335,7 +345,7 @@ int RGWLib::init()
   RGWProcessEnv env = { store, &rest, olog, port };
 
   fec = new RGWFrontendConfig("librgw");
-  RGWFrontend *fe = new RGWLibFrontend(env, fec);
+  fe = new RGWLibFrontend(env, fec);
 
   fe->init();
   if (r < 0) {
@@ -384,7 +394,6 @@ int RGWLibIO::set_uid(RGWRados *store, string &uid)
     if (ret < 0) {
       derr << "ERROR: failed reading user info: uid=" << uid << " ret=" << ret << dendl;
     }
-
     return ret;
 }
 
@@ -457,8 +466,11 @@ int RGWLibIO::send_content_length(uint64_t len)
 }
   
 int RGWLib::get_userinfo_by_uid(const string& uid, RGWUserInfo &info)
-{
-//  fe->gen_request()
+{  
+  atomic_t failed;
+  
+  fe->gen_request("GET", uid, 4096, true, &failed);
+  return failed.read();
 }
 
 int RGWLib::get_user_acl()
@@ -479,6 +491,11 @@ int RGWLib::get_user_quota()
 
 int RGWLib::get_user_buckets_list()
 {
+  /* need to authanitcate first */
+  atomic_t failed;
+  fe->gen_request("GET", "", 4096, false, &failed);
+  return failed.read();
+
 }
 
 int RGWLib::get_bucket_objects_list()
