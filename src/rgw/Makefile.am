@@ -46,6 +46,7 @@ librgw_la_SOURCES =  \
 	rgw/rgw_keystone.cc \
 	rgw/rgw_quota.cc \
 	rgw/rgw_dencoder.cc \
+	rgw/rgw_request.cc \
 	rgw/rgw_process.cc \
 	rgw/rgw_rest_lib.cc
 
