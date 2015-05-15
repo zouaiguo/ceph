@@ -209,6 +209,14 @@ int RGWLibRequestEnv::sign(RGWAccessKey& access_key)
 
 };
 
+class RGWLibFrontend : public RGWProcessFrontend {
+public:
+  RGWLibFrontend(RGWProcessEnv& pe, RGWFrontendConfig *_conf) : RGWProcessFrontend(pe, _conf) {}
+  int init();
+  void gen_request(const string& method, const string& resource, int content_length, bool user_command,
+		   atomic_t *fail_flag);
+};
+
 class RGWLibProcess : public RGWProcess {
     RGWAccessKey access_key;
 public:
