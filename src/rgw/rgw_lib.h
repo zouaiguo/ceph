@@ -1,11 +1,13 @@
 #ifndef RGW_LIB_H
 #define RGW_LIB_H
 
+#include "include/unordered_map.h"
 #include "rgw_common.h"
 #include "rgw_client_io.h"
 #include "rgw_rest.h"
 #include "rgw_request.h"
 #include "rgw_process.h"
+
 
 class RGWLibFrontendConfig;
 class RGWLibFrontend;
@@ -21,6 +23,12 @@ class RGWLib {
   RGWProcessEnv env;
   RGWRados *store;
   RGWRESTMgr *mgr;
+  ceph::unordered_map<string, uint64_t> allocated_objects_handles;
+  ceph::unordered_map<uint64_t, string> handles_map;
+  atomic64_t last_allocated_handle;
+
+  int get_uri(const uint64_t handle, string &uri);
+
 public:
   RGWLib() {}
   ~RGWLib() {}
@@ -28,6 +36,9 @@ public:
   int init();
   int stop();
 
+  /* generate dynamic handle currently unique per librgw object 
+   */
+  uint64_t get_new_handle(const string& url);
   /* User interface */
   int get_userinfo_by_uid(const string& uid, RGWUserInfo &info);
   int get_user_acl();
