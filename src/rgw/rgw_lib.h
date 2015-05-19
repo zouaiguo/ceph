@@ -26,9 +26,6 @@ class RGWLib {
   ceph::unordered_map<string, uint64_t> allocated_objects_handles;
   ceph::unordered_map<uint64_t, string> handles_map;
   atomic64_t last_allocated_handle;
-
-  int get_uri(const uint64_t handle, string &uri);
-
 public:
   RGWLib() {}
   ~RGWLib() {}
@@ -39,6 +36,9 @@ public:
   /* generate dynamic handle currently unique per librgw object 
    */
   uint64_t get_new_handle(const string& url);
+
+  int get_uri(const uint64_t handle, string &uri);
+
   /* User interface */
   int get_userinfo_by_uid(const string& uid, RGWUserInfo &info);
   int get_user_acl();

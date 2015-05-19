@@ -39,6 +39,8 @@ int rgw_get_handle(const char *uri, struct nfs_handle *handle);
 */
 int rgw_check_handle(const struct nfs_handle *handle);
 
+int rgw_mount(const char *uid, const struct nfs_handle *handle);
+  
 /*
   create a new dirctory
 */
@@ -47,14 +49,14 @@ int rgw_create_directory(const struct nfs_handle *parent_handle, const char *nam
 /*
   create a new file
 */
-int rgw_create_file(const char* name, const char *dir);
+  int rgw_create_file(const struct nfs_handle *parent_handle, const char* name);
 
-int rgw_rename(const char* old_name, const char* new_name);
+  int rgw_rename(const struct nfs_handle *parent_handle, const char* old_name, const char* new_name);
 
 /*
   remove file or directory
 */
-int rgw_unlink(const char* path);
+int rgw_unlink(const struct nfs_handle *parent_handle, const char* path);
 
 /*
     lookup a directory or file 
