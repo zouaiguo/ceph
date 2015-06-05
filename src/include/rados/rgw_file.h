@@ -39,7 +39,8 @@ int rgw_get_handle(const char *uri, struct nfs_handle *handle);
 */
 int rgw_check_handle(const struct nfs_handle *handle);
 
-int rgw_mount(const char *uid, const struct nfs_handle *handle);
+  int rgw_mount(const char *uid, const char *key, const char *secret,
+		          const struct nfs_handle *handle);
   
 /*
   create a new dirctory

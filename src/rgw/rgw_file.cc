@@ -35,9 +35,31 @@ int rgw_check_handle(const struct nfs_handle *handle)
   return librgw.check_handle(handle);
 }
 
-int rgw_mount(const char *path, int permissions,  const struct nfs_handle *handle)
+int rgw_mount(const char *uid, const char *key, const char *secret,
+	                const struct nfs_handle *handle)
 {
-  /* get users permission */
+  int rc;
+  string uri = uid + "\";
+  string auth_hdr;
+  map<string, string> meta_map;
+  map<string, string> sub_resources;
+
+  rgw_create_s3_canonical_header('GET',
+                                 NULL, /* const char *content_md5 */
+                                 'text/html',
+                                 "",
+                                 meta_map,
+                                 urti.c_str(),
+                                 sub_resources,
+                                 auth_hdr);
+
+  /* check key */
+  rc = rgw_get_s3_header_digest(auth_hdr, key, secret);
+  if (rc < 0 ) {
+    return rc;
+  }
+
+  return rgw_get_handle(uri);
   
 }
 
