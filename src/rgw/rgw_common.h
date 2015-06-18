@@ -148,6 +148,7 @@ using ceph::crypto::MD5;
 #define ERR_MALFORMED_XML        2029
 #define ERR_USER_SUSPENDED       2100
 #define ERR_INTERNAL_ERROR       2200
+#define ERR_FOUND_REDIRECT       2201 
 
 #ifndef UINT32_MAX
 #define UINT32_MAX (0xffffffffu)
@@ -1062,6 +1063,9 @@ struct req_state {
    string req_id;
 
    req_info info;
+
+   /*field for google oauth 2.0*/
+   uuid_t goog_oauth_state_id;
 
    req_state(CephContext *_cct, class RGWEnv *e);
    ~req_state();

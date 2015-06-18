@@ -93,6 +93,8 @@ radosgw_SOURCES = \
 	rgw/rgw_rest_config.cc \
 	rgw/rgw_http_client.cc \
 	rgw/rgw_swift.cc \
+	rgw/rgw_goog_auth.cc \
+	rgw/rgw_goog_auth_rdr.cc \
 	rgw/rgw_swift_auth.cc \
 	rgw/rgw_loadgen.cc \
 	rgw/rgw_main.cc
@@ -144,6 +146,8 @@ noinst_HEADERS += \
 	rgw/rgw_http_client.h \
 	rgw/rgw_swift.h \
 	rgw/rgw_swift_auth.h \
+	rgw/rgw_goog_auth_rdr.h \
+	rgw/rgw_goog_auth.h \
 	rgw/rgw_quota.h \
 	rgw/rgw_rados.h \
 	rgw/rgw_replica_log.h \

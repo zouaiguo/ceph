@@ -59,6 +59,7 @@
 #include "rgw_loadgen.h"
 #include "rgw_civetweb.h"
 #include "rgw_civetweb_log.h"
+#include "rgw_goog_auth.h"
 
 #include "civetweb/civetweb.h"
 
@@ -716,6 +717,9 @@ static int civetweb_callback(struct mg_connection *conn) {
   RGWRequest *req = new RGWRequest(store->get_new_req_id());
   RGWMongoose client_io(conn, pe->port);
 
+  client_io.init(g_ceph_context);
+
+
   int ret = process_request(store, rest, req, &client_io, olog);
   if (ret < 0) {
     /* we don't really care about return code */
@@ -1114,6 +1118,8 @@ int main(int argc, const char **argv)
 
   if (apis_map.count("swift_auth") > 0)
     rest.register_resource(g_conf->rgw_swift_auth_entry, set_logging(new RGWRESTMgr_SWIFT_Auth));
+
+    rest.register_resource("goog", set_logging(new RGWRESTMgr_GOOG_Auth));
 
   if (apis_map.count("admin") > 0) {
     RGWRESTMgr_Admin *admin_resource = new RGWRESTMgr_Admin;
