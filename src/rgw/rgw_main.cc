@@ -60,6 +60,7 @@
 #include "rgw_civetweb.h"
 #include "rgw_civetweb_log.h"
 #include "rgw_goog_auth.h"
+#include "rgw_goog_auth_rdr.h"
 
 #include "civetweb/civetweb.h"
 
@@ -1119,7 +1120,8 @@ int main(int argc, const char **argv)
   if (apis_map.count("swift_auth") > 0)
     rest.register_resource(g_conf->rgw_swift_auth_entry, set_logging(new RGWRESTMgr_SWIFT_Auth));
 
-    rest.register_resource("goog", set_logging(new RGWRESTMgr_GOOG_Auth));
+    rest.register_resource("oauth/singin", set_logging(new RGWRESTMgr_GOOG_Auth));
+    rest.register_resource("oauth/redirect", set_logging(new RGWRESTMgr_GOOG_Auth_Rdr));
 
   if (apis_map.count("admin") > 0) {
     RGWRESTMgr_Admin *admin_resource = new RGWRESTMgr_Admin;

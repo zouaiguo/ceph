@@ -43,7 +43,7 @@ void RGW_GOOG_Auth_Get::send_response()
   std::string redirect = "https://oauth.io/auth/google?k=lQ8NFm40FMCSc1FOK0leMixH0Jk&opts={\"state\":\"de8b5e14-d14a-4e13-5eb7-f7e59431f434";
   std::string state = std::string(reinterpret_cast<const char*>(s->goog_oauth_state_id), sizeof(s->goog_oauth_state_id)/sizeof(s->goog_oauth_state_id[0]));
   //redirect += state;
-  redirect += "\"}&redirect_type=server&redirect_uri=http://localhost:3000/oauth/redirect\"";
+  redirect += "\"}&redirect_type=server&redirect_uri=http://localhost:8000/oauth/redirect";
   dump_redirect(s,redirect);
   end_header(s,this,"text/html");
   cout<< redirect;
