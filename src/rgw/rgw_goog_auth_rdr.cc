@@ -12,6 +12,9 @@
 
 #include "rgw_client_io.h"
 #include <uuid/uuid.h>
+#include <curl/curl.h>
+#include <curl/easy.h>
+#include "rgw_http_client.h"
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -19,6 +22,40 @@
 
 using namespace ceph::crypto;
 
+static size_t receive_http_header(void *ptr, size_t size, size_t nmemb, void *_info)
+{
+  RGWHTTPClient *client = static_cast<RGWHTTPClient *>(_info);
+  size_t len = size * nmemb;
+  int ret = client->receive_header(ptr, size * nmemb);
+  if (ret < 0) {
+    dout(0) << "WARNING: client->receive_header() returned ret=" << ret << dendl;
+  }
+
+  return len;
+}
+
+static size_t receive_http_data(void *ptr, size_t size, size_t nmemb, void *_info)
+{
+  RGWHTTPClient *client = static_cast<RGWHTTPClient *>(_info);
+  size_t len = size * nmemb;
+  int ret = client->receive_data(ptr, size * nmemb);
+  if (ret < 0) {
+    dout(0) << "WARNING: client->receive_data() returned ret=" << ret << dendl;
+  }
+
+  return len;
+}
+
+static size_t send_http_data(void *ptr, size_t size, size_t nmemb, void *_info)
+{
+  RGWHTTPClient *client = static_cast<RGWHTTPClient *>(_info);
+  int ret = client->send_data(ptr, size * nmemb);
+  if (ret < 0) {
+    dout(0) << "WARNING: client->receive_data() returned ret=" << ret << dendl;
+  }
+
+  return ret;
+}
 
 class RGWPostOAuthToken: public RGWHTTPClient {
   bufferlist *bl;
@@ -49,6 +86,38 @@ public:
   int receive_header(void *ptr, size_t len) {
     return 0;
   }
+  
+int process(const char *method, const char *url, const char *data)
+{
+  int ret = 0;
+  CURL *curl_handle;
+
+  char error_buf[CURL_ERROR_SIZE];
+
+  curl_handle = curl_easy_init();
+
+  dout(20) << "sending request to " << url << dendl;
+
+
+  curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, method);
+  curl_easy_setopt(curl_handle, CURLOPT_URL, url);
+  curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+  curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
+  curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, receive_http_header);
+  curl_easy_setopt(curl_handle, CURLOPT_WRITEHEADER, (void *)this);
+  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, receive_http_data);
+  curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)this);
+  curl_easy_setopt(curl_handle, CURLOPT_ERRORBUFFER, (void *)error_buf);
+  curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, data); 
+  CURLcode status = curl_easy_perform(curl_handle);
+  if (status) {
+    dout(0) << "curl_easy_performed returned error: " << error_buf << dendl;
+    ret = -EINVAL;
+  }
+  curl_easy_cleanup(curl_handle);
+
+  return ret;
+}
 };
 class RGWGetOAuthToken : public RGWHTTPClient {
   bufferlist *bl;
@@ -89,12 +158,12 @@ void RGW_GOOG_Auth_Rdr_Get::execute()
     return;
   }
   string url = OAuthURL + "/auth/access_token";
-  getToken.append_header("Conent-Type", "application/x-www-form-urlencoded");
+  //getToken.append_header("Conent-Type", "application/x-www-form-urlencoded");
   string post_data = "code="+code+"&key=" +appKey+ "&secret="+secretKey; 
   getToken.set_post_data(post_data);
   getToken.set_send_length(post_data.size());
   ldout(s->cct,0) << "http post: " << post_data << dendl;
-  int r = getToken.process("POST",url.c_str());
+  int r = getToken.process("POST",url.c_str(), post_data.c_str());
   //int r = getToken.process("POST",post_data.c_str());
   if(r < 0){
     ldout(s->cct,0) << "http resp error: " << r << dendl;
