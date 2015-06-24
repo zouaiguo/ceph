@@ -7,8 +7,11 @@
 
 #include "rgw_op.h"
 #include "rgw_rest.h"
+#include "rgw_goog_auth_access_token.h"
 
 class RGW_GOOG_Auth_Rdr_Get : public RGWOp {
+ OAuthAcessToken ac; 
+ bufferlist bl;
 public:
   RGW_GOOG_Auth_Rdr_Get() {}
   ~RGW_GOOG_Auth_Rdr_Get() {}

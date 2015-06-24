@@ -9,6 +9,7 @@
 #include "rgw_cache.h"
 #include "rgw_bucket.h"
 #include "rgw_keystone.h"
+#include "rgw_goog_auth_access_token.h"
 
 #include "common/ceph_json.h"
 #include "common/Formatter.h"
@@ -840,4 +841,21 @@ void KeystoneToken::decode_json(JSONObj *access_obj)
   JSONDecoder::decode_json("token", token, access_obj, true);
   JSONDecoder::decode_json("user", user, access_obj, true);
   JSONDecoder::decode_json("serviceCatalog", service_catalog, access_obj);
+}
+
+void OAuthAcessToken::decode_json(JSONObj *obj){
+  JSONDecoder::decode_json("access_token", token, obj);
+  JSONDecoder::decode_json("token_type", token_type, obj);
+  JSONDecoder::decode_json("expires_in", expire, obj);
+  JSONDecoder::decode_json("request", req, obj);
+  JSONDecoder::decode_json("state", state, obj);
+  JSONDecoder::decode_json("provider", provider, obj);
+
+}
+void OAuthAcessToken::request::decode_json(JSONObj *obj){
+  JSONDecoder::decode_json("url", url, obj);
+  JSONDecoder::decode_json("headers", hdr, obj);
+}
+void OAuthAcessToken::request::headers::decode_json(JSONObj *obj){
+  JSONDecoder::decode_json("Authorization", Authorization, obj);
 }

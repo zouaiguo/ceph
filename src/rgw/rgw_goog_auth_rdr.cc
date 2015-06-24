@@ -140,7 +140,6 @@ void RGW_GOOG_Auth_Rdr_Get::execute()
 {
   int ret = -EPERM;
 
-  bufferlist bl;
   bool exists;
   string OAuthURL = "https://oauth.io";
   string secretKey = "8Se8ut2Oi-thC0Fs5AwXZQSMnBI";
@@ -167,11 +166,16 @@ void RGW_GOOG_Auth_Rdr_Get::execute()
   //int r = getToken.process("POST",post_data.c_str());
   if(r < 0){
     ldout(s->cct,0) << "http resp error: " << r << dendl;
-    return;
+  }else{
+    bl.append((char)0);
+    ldout(s->cct,0) << "http resp from oauth: " << bl.c_str()<< dendl;
+    if(ac.parse(s->cct,bl) != 0)
+      ldout(s->cct,0) << "token parse error: " << ac.token << dendl;
+    ldout(s->cct,0) << "token: " << ac.token << "expire: " << ac.expire << dendl;
+
+    ret = 0;
   }
   
-  bl.append((char)0);
-  ldout(s->cct,0) << "http resp from oauth: " << bl.c_str()<< dendl;
   set_req_state_err(s, ret);
 
 }
@@ -179,15 +183,10 @@ void RGW_GOOG_Auth_Rdr_Get::execute()
 void RGW_GOOG_Auth_Rdr_Get::send_response()
 {
   dump_errno(s);
-  end_header(s,this,"text/html");
+  end_header(s,this);
   dump_start(s);
-  //std::string redirect = "https://oauth.io/auth/google?k=lQ8NFm40FMCSc1FOK0leMixH0Jk&opts="+"{\"stat\":\""+s->goog_oauth_state_id+ "\"}&redirect_type=server&redirect_uri=http://localhost:3000/oauth/redirect";
-  std::string redirect = "https://oauth.io/auth/google?k=lQ8NFm40FMCSc1FOK0leMixH0Jk&opts={\"stat\":";
-  std::string state = std::string(reinterpret_cast<const char*>(s->goog_oauth_state_id), sizeof(s->goog_oauth_state_id)/sizeof(s->goog_oauth_state_id[0]));
-  redirect += state;
-  redirect += "\"}&redirect_type=server&redirect_uri=http://localhost:3000/oauth/redirect\"";
-  cout<< redirect;
-  rgw_flush_formatter_and_reset(s,s->formatter);
+  ldout(s->cct,0) << "respone: " << bl.c_str() << dendl;
+  s->cio->write(bl.c_str(), bl.length());
 }
 int RGWHandler_GOOG_Auth_Rdr::init(RGWRados *store, struct req_state *state, RGWClientIO *cio)
 {
@@ -228,8 +227,8 @@ int RGWHandler_GOOG_Auth_Rdr::init(RGWRados *store, struct req_state *state, RGW
 
   }
   state->dialect = "goog-auth";
-  state->formatter = new XMLFormatter(false);
-  state->format = RGW_FORMAT_XML;
+  state->formatter = new JSONFormatter;
+  state->format = RGW_FORMAT_JSON;
 
   return RGWHandler::init(store, state, cio);
 }
