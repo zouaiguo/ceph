@@ -25,11 +25,12 @@ void RGW_GOOG_Auth_Get::execute()
   int ret = -EPERM;
 
   bufferlist bl;
+  char uuid_str[36];
   uuid_t state_id;
   uuid_generate(state_id);
-  ldout(store->ctx(),0) << "oauth state id: " << state_id << dendl;
-  //s->goog_oauth_state_id = state_id;
-  memcpy(s->goog_oauth_state_id,state_id,sizeof(state_id));
+  uuid_unparse(state_id, uuid_str);
+  ldout(store->ctx(),0) << "oauth state id: " << uuid_str<< dendl;
+  memcpy(s->goog_oauth_state_id,uuid_str,sizeof(uuid_str));
   ret = ERR_FOUND_REDIRECT;   
   set_req_state_err(s, ret);
 
@@ -38,11 +39,9 @@ void RGW_GOOG_Auth_Get::execute()
 void RGW_GOOG_Auth_Get::send_response()
 {
   dump_errno(s);
-  //dump_start(s);
-  //std::string redirect = "https://oauth.io/auth/google?k=lQ8NFm40FMCSc1FOK0leMixH0Jk&opts="+"{\"stat\":\""+s->goog_oauth_state_id+ "\"}&redirect_type=server&redirect_uri=http://localhost:3000/oauth/redirect";
-  std::string redirect = "https://oauth.io/auth/google?k=lQ8NFm40FMCSc1FOK0leMixH0Jk&opts={\"state\":\"de8b5e14-d14a-4e13-5eb7-f7e59431f434";
-  std::string state = std::string(reinterpret_cast<const char*>(s->goog_oauth_state_id), sizeof(s->goog_oauth_state_id)/sizeof(s->goog_oauth_state_id[0]));
-  //redirect += state;
+  std::string redirect = "https://oauth.io/auth/google?k=lQ8NFm40FMCSc1FOK0leMixH0Jk&opts={\"state\":";
+  string state(s->goog_oauth_state_id, 36); 
+  redirect += "\"" + state; 
   redirect += "\"}&redirect_type=server&redirect_uri=http://localhost:8000/oauth/redirect";
   dump_redirect(s,redirect);
   end_header(s,this,"text/html");
