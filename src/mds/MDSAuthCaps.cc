@@ -136,24 +136,29 @@ bool MDSAuthCaps::is_capable(const std::string &inode_path,
 			     uid_t inode_uid, gid_t inode_gid, unsigned inode_mode,
 			     uid_t uid, unsigned mask) const
 {
-  for (std::vector<MDSCapGrant>::const_iterator i = grants.begin();
-       i != grants.end();
-       ++i) {
-    if (i->match.match(inode_path, uid) &&
-	i->spec.allows(mask & (MAY_READ|MAY_EXECUTE), mask & MAY_WRITE)) {
-      // check unix permissions?
-      if (i->match.uid != MDSCapMatch::MDS_AUTH_UID_ANY) {
-	// use fcntl.h macros for the file mode:
-	//  S_IRUSR  S_IRGRP  S_ROTH
-	//  S_IWUSR  S_IWGRP  S_WOTH
-	//  S_IXUSR  S_IXGRP  S_XOTH
+//  for (std::vector<MDSCapGrant>::const_iterator i = grants.begin();
+//       i != grants.end();
+//       ++i) {
+//    if (i->match.match(inode_path, uid) &&
+//	i->spec.allows(mask & (MAY_READ|MAY_EXECUTE), mask & MAY_WRITE)) {
+//      // check unix permissions?
+//      if (i->match.uid != MDSCapMatch::MDS_AUTH_UID_ANY) {
+//	// use fcntl.h macros for the file mode:
+//	//  S_IRUSR  S_IRGRP  S_ROTH
+//	//  S_IWUSR  S_IWGRP  S_WOTH
+//	//  S_IXUSR  S_IXGRP  S_XOTH
+//
+//	// WRITE ME
+//
+//      }
+//
+//      return true;
+//    }
+//  }
 
-	// WRITE ME
+  if (cct)
+    ldout(cct, 10) << "Nishtha's output" << dendl;
 
-      }
-      return true;
-    }
-  }
   return false;
 }
 
