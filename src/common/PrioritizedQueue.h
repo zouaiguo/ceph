@@ -18,7 +18,6 @@
 #include "common/Mutex.h"
 #include "common/Formatter.h"
 
-
 #include <map>
 #include <utility>
 #include <list>
