@@ -992,20 +992,17 @@ ln -sf %{_libdir}/librbd.so.1 /usr/lib64/qemu/librbd.so.1
 %endif
 
 ########################################################################
+# Empty compat packages
+#
+# We need an empty %%files list to tell rpmbuild to actually build the meta
+# package.
+
 %if 0%{with libs_compat}
 %files libs-compat
-# We need an empty %%files list for ceph-libs-compat, to tell rpmbuild to actually
-# build this meta package.
 %endif
 
-########################################################################
 %files devel-compat
-# We need an empty %%files list for ceph-devel-compat, to tell rpmbuild to
-# actually build this meta package.
 
-########################################################################
 %files -n python-ceph-compat
-# We need an empty %%files list for python-ceph-compat, to tell rpmbuild to
-# actually build this meta package.
 
 %changelog
