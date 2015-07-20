@@ -457,6 +457,14 @@ public:
   virtual void dump(Formatter *f) const;
 
   void encode(uint64_t features, int crcflags);
+
+  //dmclock specific
+  virtual __u32 get_dmClock_param_delta() const{ return 0; }
+  virtual  __u32 get_dmClock_param_rho() const { return 0;}
+  virtual  __u32 get_dmclock_slo_reserve() const { return 0;}
+  virtual  __u32 get_dmclock_slo_prop() const { return 0;}
+  virtual  __u32 get_dmclock_slo_limit() const { return 0;}
+
 };
 typedef boost::intrusive_ptr<Message> MessageRef;
 

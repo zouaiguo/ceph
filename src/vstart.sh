@@ -243,14 +243,14 @@ else
         debug auth = 20
         debug ms = 1'
     COSDDEBUG='
-        debug ms = 1
-        debug osd = 25
-        debug objecter = 20
-        debug monc = 20
-        debug journal = 20
-        debug filestore = 20
-        debug rgw = 20
-        debug objclass = 20'
+        debug ms = 0
+        debug osd = 0
+        debug objecter = 0
+        debug monc = 0
+        debug journal = 0
+        debug filestore = 0
+        debug rgw = 0
+        debug objclass = 0'
     CMDSDEBUG='
         debug ms = 1
         debug mds = 20
@@ -391,6 +391,30 @@ fi
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
 
+[client.foo1]
+        keyring = $keyring_fn
+        log file = $CEPH_OUT_DIR/\$name.\$pid.log
+        admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
+	client slo iops reserve = 250	
+	client slo iops prop = 100
+	client slo iops limit = 0
+
+[client.foo2]
+        keyring = $keyring_fn
+        log file = $CEPH_OUT_DIR/\$name.\$pid.log
+        admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
+	client slo iops reserve = 250
+	client slo iops prop = 200
+	client slo iops limit = 0
+
+[client.foo3]
+        keyring = $keyring_fn
+        log file = $CEPH_OUT_DIR/\$name.\$pid.log
+        admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
+	client slo iops reserve = 0
+	client slo iops prop = 300
+	client slo iops limit = 1000
+
 [mds]
 $DAEMONOPTS
 $CMDSDEBUG
@@ -442,6 +466,25 @@ EOF
 
 	        $SUDO $CEPH_BIN/ceph-authtool --create-keyring --gen-key --name=mon. $keyring_fn --cap mon 'allow *'
 	        $SUDO $CEPH_BIN/ceph-authtool --gen-key --name=client.admin --set-uid=0 \
+		    --cap mon 'allow *' \
+		    --cap osd 'allow *' \
+		    --cap mds 'allow *' \
+		    $keyring_fn
+
+		$SUDO $CEPH_BIN/ceph-authtool --gen-key --name=client.foo1 \
+		    --cap mon 'allow *' \
+		    --cap osd 'allow *' \
+		    --cap mds 'allow *' \
+		    $keyring_fn
+
+		$SUDO $CEPH_BIN/ceph-authtool --gen-key --name=client.foo2 \
+		    --cap mon 'allow *' \
+		    --cap osd 'allow *' \
+		    --cap mds 'allow *' \
+		    $keyring_fn
+
+
+		$SUDO $CEPH_BIN/ceph-authtool --gen-key --name=client.foo3 \
 		    --cap mon 'allow *' \
 		    --cap osd 'allow *' \
 		    --cap mds 'allow *' \

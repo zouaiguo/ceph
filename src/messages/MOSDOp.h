@@ -19,7 +19,6 @@
 #include "msg/Message.h"
 #include "osd/osd_types.h"
 #include "include/ceph_features.h"
-
 /*
  * OSD op
  *
@@ -46,6 +45,8 @@ private:
   object_t oid;
   object_locator_t oloc;
   pg_t pgid;
+
+
 public:
   vector<OSDOp> ops;
 private:
@@ -55,6 +56,13 @@ private:
   vector<snapid_t> snaps;
 
   uint64_t features;
+
+  // dmclock specific variables
+  __u32 dmclock_param_delta;
+  __u32 dmclock_param_rho;
+  __u32 dmclock_slo_reserve;
+  __u32 dmclock_slo_prop;
+  __u32 dmclock_slo_limit;
 
 public:
   friend class MOSDOpReply;
@@ -101,7 +109,12 @@ public:
       client_inc(inc),
       osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),
       oid(_oid), oloc(_oloc), pgid(_pgid),
-      features(feat) {
+      features(feat),
+      dmclock_param_delta(1),
+      dmclock_param_rho(1),
+      dmclock_slo_reserve(0),
+      dmclock_slo_prop(1),
+      dmclock_slo_limit(0){
     set_tid(tid);
   }
 private:
@@ -110,6 +123,17 @@ private:
 public:
   void set_version(eversion_t v) { reassert_version = v; }
   void set_mtime(utime_t mt) { mtime = mt; }
+
+  void set_dmclock_slo(__u32 r, __u32 p, __u32 l ){
+    dmclock_slo_reserve = r;
+    dmclock_slo_prop = p;
+    dmclock_slo_limit = l;
+  }
+  __u32 get_dmClock_param_delta() const {return dmclock_param_delta;}
+  __u32 get_dmClock_param_rho() const { return dmclock_param_rho;}
+  __u32 get_dmclock_slo_reserve() const { return dmclock_slo_reserve;}
+  __u32 get_dmclock_slo_prop() const { return dmclock_slo_prop;}
+  __u32 get_dmclock_slo_limit() const { return dmclock_slo_limit;}
 
   // ops
   void add_simple_op(int o, uint64_t off, uint64_t len) {
@@ -240,6 +264,9 @@ struct ceph_osd_request_head {
 
       ::encode_nohead(oid.name, payload);
       ::encode_nohead(snaps, payload);
+
+      //::encode(dmclock_param_delta, payload);
+      //::encode(dmclock_param_rho, payload);
     } else {
       header.version = HEAD_VERSION;
       ::encode(client_inc, payload);
@@ -263,6 +290,12 @@ struct ceph_osd_request_head {
 
       ::encode(retry_attempt, payload);
       ::encode(features, payload);
+
+      ::encode(dmclock_param_delta, payload);
+      ::encode(dmclock_param_rho, payload);
+      ::encode(dmclock_slo_reserve, payload);
+      ::encode(dmclock_slo_prop, payload);
+      ::encode(dmclock_slo_limit, payload);
     }
   }
 
@@ -302,6 +335,9 @@ struct ceph_osd_request_head {
 
       decode_nohead(oid_len, oid.name, p);
       decode_nohead(num_snaps, snaps, p);
+
+      //::decode(dmclock_param_delta, p);
+      //::decode(dmclock_param_rho, p);
 
       // recalculate pgid hash value
       pgid.set_ps(ceph_str_hash(CEPH_STR_HASH_RJENKINS,
@@ -350,6 +386,13 @@ struct ceph_osd_request_head {
 	::decode(features, p);
       else
 	features = 0;
+
+      ::decode(dmclock_param_delta, p);
+      ::decode(dmclock_param_rho, p);
+      ::decode(dmclock_slo_reserve, p);
+      ::decode(dmclock_slo_prop, p);
+      ::decode(dmclock_slo_limit, p);
+
     }
 
     OSDOp::split_osd_op_vector_in_data(ops, data);
