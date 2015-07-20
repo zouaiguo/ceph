@@ -1,0 +1,64 @@
+my quick to-do list:
+---------------------------
+From the root of the ceph repo, you can use:
+
+     ./do_autogen.sh -d 1
+
+to configure things for development. From there, compile with make (-j
+works).
+
+To run a development cluster, in the src dir run:
+
+install -d -m0755 out dev/osd0
+./vstart.sh -n -l
+
+You can run ceph commands from the src dir, e.g. ./ceph -s which should
+report HEALTH_OK and a bunch of other info.
+
+After changing something, compile again with make, and if it's a server
+side change recreate the cluster with ./vstart.sh -n -l.
+
+Once your cluster is running, you can run some rados tests to make sure
+it still works. ./ceph_test_rados_api_io is a simple one.
+
+For editors, some folks use emacs or vim, possibly with ctags, a few
+use eclipse. ctags is not great with c++, so I often just use git grep.
+
+In terms of dmClock, we're mainly concerned with osd operations, so to
+start with you'll probably want to add optional tags to
+src/message/MOSDOp.h, which is the wire format for a request to an OSD.
+
+The client would set those in src/osdc/Objecter.cc _prepare_osd_op().
+To start with they could be defined by a config option in
+src/common/config_opts.h, though later we'd want to allow higher level
+policy
+to be passed down from librbd.
+
+
+src/common/config_opts.h
+src/message/MOSDOp.h
+src/osdc/Objecter.cc _prepare_osd_op()
+
+
+Yes.  We'll need to modify the request messages (messages/MOSDOp.h) and
+maybe the reply (messages/MOSDOpReply.h)?  And the client code in
+osdc/Objecter.{cc,h} will be have to do the extra bookkeeping and tagging.
+
+
+Both.. the clients will do the tagging, and then the OSD will have it's
+current priority queue (which is a simple weight-based thing with a token
+bucket filter) with something that understands the new tags.  See
+
+
+src/common/PrioritizedQueue.h
+It's a bit more complicated than that because it is a sharded work
+queue, and each shard has an independent priority queue.  We'll need to
+think a bit about how to make this coherent across the OSD...
+
+
+
+
+
+
+
+
