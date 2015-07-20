@@ -323,6 +323,12 @@ OPTION(client_debug_inject_tick_delay, OPT_INT, 0) // delay the client tick for 
 OPTION(client_max_inline_size, OPT_U64, 4096)
 OPTION(client_inject_release_failure, OPT_BOOL, false)  // synthetic client bug for testing
 OPTION(client_inject_fixed_oldest_tid, OPT_BOOL, false)  // synthetic client bug for testing
+
+
+OPTION(client_slo_iops_reserve, OPT_U32, 0) // no reservation IOPS
+OPTION(client_slo_iops_prop, OPT_U32, 100) // default proportion 100 IOPS
+OPTION(client_slo_iops_limit, OPT_U32, 0) // no upper limit IOPS
+
 // note: the max amount of "in flight" dirty data is roughly (max - target)
 OPTION(fuse_use_invalidate_cb, OPT_BOOL, false) // use fuse 2.8+ invalidate callback to keep page cache consistent
 OPTION(fuse_allow_other, OPT_BOOL, true)
@@ -752,6 +758,7 @@ OPTION(osd_bench_large_size_max_throughput, OPT_U64, 100 << 20) // 100 MB/s
 OPTION(osd_bench_max_block_size, OPT_U64, 64 << 20) // cap the block size at 64MB
 OPTION(osd_bench_duration, OPT_U32, 30) // duration of 'osd bench', capped at 30s to avoid triggering timeouts
 
+
 OPTION(memstore_device_bytes, OPT_U64, 1024*1024*1024)
 
 OPTION(filestore_omap_backend, OPT_STR, "leveldb")
@@ -1060,3 +1067,4 @@ OPTION(throttler_perf_counter, OPT_BOOL, true) // enable/disable throttler perf 
 // This will be set to true when it is safe to start threads.
 // Once it is true, it will never change.
 OPTION(internal_safe_to_start_threads, OPT_BOOL, false)
+
