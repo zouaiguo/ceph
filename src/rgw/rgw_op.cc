@@ -1298,6 +1298,7 @@ static int forward_request_to_master(struct req_state *s, obj_version *objv, RGW
 
 void RGWCreateBucket::pre_exec()
 {
+  ldout(s->cct, 20) << "create bucket pre exec " << dendl;
   rgw_bucket_object_pre_exec(s);
 }
 
@@ -1308,10 +1309,10 @@ void RGWCreateBucket::execute()
   bufferlist aclbl;
   bufferlist corsbl;
   bool existed;
+  ret = get_params();
   rgw_obj obj(store->zone.domain_root, s->bucket_name_str);
   obj_version objv, *pobjv = NULL;
 
-  ret = get_params();
   if (ret < 0)
     return;
 
@@ -1433,14 +1434,17 @@ void RGWCreateBucket::execute()
 
 int RGWDeleteBucket::verify_permission()
 {
-  if (!verify_bucket_permission(s, RGW_PERM_WRITE))
-    return -EACCES;
+
+  ldout(s->cct, 0) << "bucket acl " << s->bucket_acl << dendl;
+  //if (!verify_bucket_permission(s, RGW_PERM_WRITE))
+    //return -EACCES;
 
   return 0;
 }
 
 void RGWDeleteBucket::pre_exec()
 {
+  get_params();
   rgw_bucket_object_pre_exec(s);
 }
 
@@ -2195,11 +2199,13 @@ int RGWDeleteObj::verify_permission()
 
 void RGWDeleteObj::pre_exec()
 {
+    ldout(store->ctx(), 0) << "create bucket pre_exec" << ret << dendl;
   rgw_bucket_object_pre_exec(s);
 }
 
 void RGWDeleteObj::execute()
 {
+    ldout(store->ctx(), 0) << "create bucket exec" << ret << dendl;
   ret = -EINVAL;
   rgw_obj obj(s->bucket, s->object);
   if (!s->object.empty()) {

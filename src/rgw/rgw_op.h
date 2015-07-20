@@ -400,6 +400,7 @@ public:
   void pre_exec();
   void execute();
 
+  virtual int get_params(){ return 0;}
   virtual void send_response() = 0;
   virtual const string name() { return "delete_bucket"; }
   virtual RGWOpType get_type() { return RGW_OP_DELETE_BUCKET; }

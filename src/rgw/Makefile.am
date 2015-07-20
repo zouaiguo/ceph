@@ -15,6 +15,7 @@ librgw_la_SOURCES =  \
 	rgw/librgw.cc \
 	rgw/rgw_acl.cc \
 	rgw/rgw_acl_s3.cc \
+	rgw/rgw_acl_goog.cc \
 	rgw/rgw_acl_swift.cc \
 	rgw/rgw_client_io.cc \
 	rgw/rgw_fcgi.cc \
@@ -82,6 +83,7 @@ radosgw_SOURCES = \
 	rgw/rgw_rest.cc \
 	rgw/rgw_rest_swift.cc \
 	rgw/rgw_rest_s3.cc \
+	rgw/rgw_rest_goog.cc \
 	rgw/rgw_rest_usage.cc \
 	rgw/rgw_rest_user.cc \
 	rgw/rgw_rest_bucket.cc \
@@ -124,6 +126,7 @@ noinst_HEADERS += \
 	rgw/logrotate.conf \
 	rgw/rgw_acl.h \
 	rgw/rgw_acl_s3.h \
+	rgw/rgw_acl_goog.h \
 	rgw/rgw_acl_swift.h \
 	rgw/rgw_client_io.h \
 	rgw/rgw_fcgi.h \
@@ -157,6 +160,7 @@ noinst_HEADERS += \
 	rgw/rgw_rest.h \
 	rgw/rgw_rest_swift.h \
 	rgw/rgw_rest_s3.h \
+	rgw/rgw_rest_goog.h \
 	rgw/rgw_auth_s3.h \
 	rgw/rgw_rest_admin.h \
 	rgw/rgw_rest_usage.h \

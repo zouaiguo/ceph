@@ -1067,6 +1067,7 @@ struct req_state {
    /*field for google oauth 2.0*/
    //uuid_t goog_oauth_state_id;
    char goog_oauth_state_id[36];
+   bool is_bucket;
 
    req_state(CephContext *_cct, class RGWEnv *e);
    ~req_state();
