@@ -2853,7 +2853,7 @@ namespace {
     CACHE_TARGET_FULL_RATIO,
     CACHE_MIN_FLUSH_AGE, CACHE_MIN_EVICT_AGE,
     ERASURE_CODE_PROFILE, MIN_READ_RECENCY_FOR_PROMOTE,
-    WRITE_FADVISE_DONTNEED};
+    WRITE_FADVISE_DONTNEED, FAST_READ};
 
   std::set<osd_pool_get_choices>
     subtract_second_from_first(const std::set<osd_pool_get_choices>& first,
@@ -3304,7 +3304,8 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
       ("cache_min_evict_age", CACHE_MIN_EVICT_AGE)
       ("erasure_code_profile", ERASURE_CODE_PROFILE)
       ("min_read_recency_for_promote", MIN_READ_RECENCY_FOR_PROMOTE)
-      ("write_fadvise_dontneed", WRITE_FADVISE_DONTNEED);
+      ("write_fadvise_dontneed", WRITE_FADVISE_DONTNEED)
+      ("fast_read", FAST_READ);
 
     typedef std::set<osd_pool_get_choices> choices_set_t;
 
@@ -3453,6 +3454,9 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
 			   p->has_flag(pg_pool_t::FLAG_WRITE_FADVISE_DONTNEED) ?
 			   "true" : "false");
 	    break;
+          case FAST_READ:
+            f->dump_int("fast_read", p->fast_read);
+            break;
 	}
 	f->close_section();
 	f->flush(rdata);
@@ -3544,6 +3548,9 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
 	      (p->has_flag(pg_pool_t::FLAG_WRITE_FADVISE_DONTNEED) ?
 	       "true" : "false") << "\n";
 	    break;
+          case FAST_READ:
+            ss << "fast_read: " << p->fast_read << "\n";
+            break;
 	}
 	rdata.append(ss.str());
 	ss.str("");
@@ -4854,6 +4861,16 @@ int OSDMonitor::prepare_command_pool_set(map<string,cmd_vartype> &cmdmap,
     } else {
       ss << "expecting value 'true', 'false', '0', or '1'";
       return -EINVAL;
+    }
+  } else if (var == "fast_read") {
+    if (val == "true" || (interr.empty() && n == 1)) {
+      if (p.is_replicated()) {
+        ss << "fast read is not supported in replication pool";
+        return -EINVAL;
+      }
+      p.fast_read = true;
+    } else if (val == "false" || (interr.empty() && n == 0)) {
+      p.fast_read = false;
     }
   } else {
     ss << "unrecognized variable '" << var << "'";
