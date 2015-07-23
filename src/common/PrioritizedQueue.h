@@ -18,6 +18,7 @@
 #include "common/Mutex.h"
 #include "common/Formatter.h"
 #include "common/ceph_context.h"
+#include "common/config.h"
 
 #include <map>
 #include <utility>
@@ -48,6 +49,14 @@
  * to provide fairness for different clients.
  */
 
+//#pragma push_macro("dout_subsys")
+//#undef dout_subsys
+//#define dout_subsys ceph_subsys_osd
+//
+//#pragma push_macro("dout_prefix")
+//#undef dout_prefix
+//#define dout_prefix  *_dout << "dm_queue: "
+
 struct SLO {
   unsigned reserve;
   unsigned prop;
@@ -73,6 +82,10 @@ class PrioritizedQueue {
   CephContext *cct;
   std::string status;
 
+  // data structure for dmClock
+  enum tag_types_t {
+  	Q_NONE = -1, Q_RESERVE = 0, Q_PROP, Q_LIMIT, Q_COUNT
+  };
   typedef std::list<std::pair<double, T> > ListPairs; //will hold deadline time-stamp
   template<class F>
     static unsigned filter_list_pairs(ListPairs *l, F f, std::list<T> *out) {
@@ -217,11 +230,9 @@ class PrioritizedQueue {
       unsigned throughput_available, throughput_prop, throughput_system;
       int64_t size;
       int64_t virtual_clock;
+      CephContext * cct;
 
-      // data structure for dmClock
-      enum tag_types_t {
-	Q_NONE = -1, Q_RESERVE = 0, Q_PROP, Q_LIMIT, Q_COUNT
-      };
+
 
       struct Tag {
 	double_t r_deadline, r_spacing;
@@ -232,24 +243,24 @@ class PrioritizedQueue {
 	K cl;
 	SLO slo;
 	double_t stat;
+	int64_t last_delta, last_rho;
 
 	Tag(K _cl, SLO _slo) :
 	  r_deadline(0), r_spacing(0), p_deadline(0), p_spacing(0), l_deadline(
 	      0), l_spacing(0), active(true), selected_tag(
-		Q_NONE), cl(_cl), slo(_slo), stat(0) {
+		Q_NONE), cl(_cl), slo(_slo), stat(0), last_delta(0), last_rho(0) {
 	      }
 	Tag(utime_t t) :
 	  r_deadline(t), r_spacing(0), p_deadline(t), p_spacing(0), l_deadline(
 	      t), l_spacing(0), active(true), selected_tag(
-		Q_NONE), stat(0) {
+		Q_NONE), stat(0), last_delta(0), last_rho(0) {
 	      }
 
 	Tag(int64_t t) :
 	  r_deadline(t), r_spacing(0), p_deadline(t), p_spacing(0), l_deadline(
 	      t), l_spacing(0), active(true), selected_tag(
-		Q_NONE), stat(0) {
+		Q_NONE), stat(0), last_delta(0), last_rho(0) {
 	      }
-
       };
       typedef std::vector<Tag> Schedule;
       Schedule schedule;
@@ -369,6 +380,8 @@ class PrioritizedQueue {
       void issue_idle_cycle() {
 	//ldout(cct, 0) << get_current_clock() << "____idle_____" << "\t" << dendl;
 	//print_current_tag(Q_NONE);
+//	if(cct)
+//	  ldout(cct, 0) << "idle cycle issued "<< dendl;
 	increment_clock();
 	update_min_deadlines();
       }
@@ -413,15 +426,14 @@ class PrioritizedQueue {
 	std::ostringstream data;
 	data << "throughput at " << get_current_clock() << ":" << std::endl;
 	for (size_t i = 0; i < schedule.size(); i++)
-	  data << "\t client " << i << " IOPS :" << schedule[i].stat
-	    << std::endl;
+	  data << "\t cl " << schedule[i].cl << " IOPS :" << schedule[i].stat << std::endl;
 	return data.str();
       }
 
       // helper function
       std::string print_current_tag(tag_types_t tt, int index = -1) {
 	std::ostringstream data;
-	data << get_current_clock() << "\t";
+	data << "current time: "<< get_current_clock() << " deadlines:"<<std::endl;
 	for (typename Schedule::iterator it = schedule.begin();
 	    it != schedule.end(); ++it) {
 	  Tag _tag = *it;
@@ -433,8 +445,8 @@ class PrioritizedQueue {
 	    if (tt == Q_LIMIT)
 	      data << "_";
 	  }
-	  data << _tag.r_deadline << "\t " << _tag.p_deadline << " \t "
-	    << _tag.l_deadline << " \t ||" << std::endl;
+	  data <<"\t["<< _tag.r_deadline << " , " << _tag.p_deadline << " , "
+	    << _tag.l_deadline << " ]" << std::endl;
 	}
 	return data.str();
       }
@@ -445,15 +457,16 @@ class PrioritizedQueue {
 	    other.throughput_available), throughput_prop(
 	      other.throughput_prop), throughput_system(
 		other.throughput_system), size(other.size), schedule(
-		  other.schedule), virtual_clock(other.virtual_clock) {
+		  other.schedule), virtual_clock(other.virtual_clock),
+		  cct(other.cct){
 		}
 
-      SubQueueDMClock() :
+      SubQueueDMClock(CephContext* cct_= NULL) :
 	throughput_available(0), throughput_prop(0), throughput_system(
-	    0), size(0), virtual_clock(1) {
+	    0), size(0), virtual_clock(1), cct(cct_) {
 	}
 
-      int64_t get_current_clock() {
+      int64_t get_current_clock() const{
 	//should call ceph_time_now()
 	return virtual_clock;
       }
@@ -540,6 +553,9 @@ class PrioritizedQueue {
 	  }
 	  if(purge_required)
 	    purge_idle_clients();
+
+//	  if(cct)
+//	    ldout(cct,0) <<__func__ <<" purge idle clients" <<dendl;
 	}
 
       void remove_by_class(K k, std::list<T> *out) {
@@ -579,7 +595,7 @@ class PrioritizedQueue {
 	return NULL;
       }
 
-      T pop_front() {
+      std::pair<T, tag_types_t> pop_front() {
 	assert((size != 0));
 	size_t cl_index;
 	Tag *tag = front(cl_index);
@@ -598,26 +614,35 @@ class PrioritizedQueue {
 	if (requests[tag->cl].empty())
 	  tag->active = false;
 
+//	if(cct){
+//	    ldout(cct, 0) << __func__<< " ID " << tag->cl << " size: "<< size <<" #client "<< schedule.size() <<dendl;
+//	}
 	increment_clock();
 	update_active_tag(cl_index);
 	size--;
-	return ret;
+	return std::make_pair(ret, tag->selected_tag);
       }
 
       void enqueue(K cl, SLO slo, double cost, T item) {
 	bool new_cl = (requests.find(cl) == requests.end());
 	if (new_cl) {
 	  create_new_tag(cl, slo);
+//	  if(cct)
+//	    ldout(cct, 0) << "new client "<< cl << dendl;
 	} else {
 	  if (requests[cl].empty()) {
 	    size_t index = 0;
 	    bool found = get_client_index(cl, index);
 	    assert(found != false);
 	    update_idle_tag(index);
+//	    if(cct)
+//	      ldout(cct, 0) << "was idle client "<< cl << dendl;
 	  }
 	}
 	requests[cl].push_back(std::make_pair(cost, item));
 	size++;
+//	if(cct)
+//	  ldout(cct, 0) << __func__ <<" num_msg: "<< size << "map-size "<<requests.size() << " num_schedule: "<<schedule.size() << dendl;
       }
 
       void enqueue_front(K cl, SLO slo, double cost, T item) {
@@ -649,26 +674,42 @@ class PrioritizedQueue {
       void dump(Formatter *f) const {
 	f->dump_int("system_throughput", throughput_system);
 	f->dump_int("available throughput", throughput_available);
-	f->dump_int("size", size);
+	f->dump_int("num_req", size);
 	f->dump_int("num_client", schedule.size());
-	if (!empty()) {
-	  f->dump_string("current IOPS", print_iops());
-	  f->dump_string("current deadlines", print_current_tag(Q_NONE));
+	f->dump_int("num_map", requests.size());
+	f->dump_int("cur_clock", get_current_clock());
+
+	f->open_array_section("dm_queue");
+	for (size_t i = 0; i < schedule.size(); i++){
+	    f->open_object_section("client_iops");
+	    f->open_object_section("client");
+	    schedule[i].cl.dump(f);
+	    f->close_section(); //client
+	    f->dump_int("iops" , schedule[i].stat);
+	    std::ostringstream data;
+	    data <<"["<< schedule[i].r_deadline << " , " << schedule[i].p_deadline << " , "
+	    	    << schedule[i].l_deadline << " ]";
+	    f->dump_string("deadline",  data.str());
+	    f->close_section(); //client_iops
 	}
+	f->close_section(); //dm_queue
       }
 
       std::string print_status() {
 	std::ostringstream data;
-	data << "system_throughput: " << throughput_system << std::endl;
-	data << "available throughput: " << throughput_available
-	  << std::endl;
-	data << "size: " << size << std::endl;
+	data << "sys_throughput: " << throughput_system << std::endl;
+	data << "avail throughput: " << throughput_available << std::endl;
+	data << "num_req: " << size << std::endl;
 	data << "num_client: " << schedule.size() << std::endl;
-	if (!empty()) {
-	  data << "current IOPS: " << print_iops() << std::endl;
-	  data << "current deadlines: " << print_current_tag(Q_NONE)
-	    << std::endl;
-	}
+	data << "num_map: " << requests.size() << std::endl;
+	data << "clients: \n";
+	for(size_t i= 0 ; i <schedule.size(); i++ )
+	  data<<"\t"<<schedule[i].cl<<std::endl;
+
+	//if (!empty()) {
+	  data << print_iops() << std::endl;
+	  data << print_current_tag(Q_NONE) << std::endl;
+	//}
 	return data.str();
       }
   };
@@ -705,12 +746,12 @@ class PrioritizedQueue {
   }
 
   public:
-  PrioritizedQueue(unsigned max_per, unsigned min_c, CephContext *cct = NULL) :
-    total_priority(0), max_tokens_per_subqueue(max_per), min_cost(
-	min_c), cct(cct) {
+  PrioritizedQueue(unsigned max_per, unsigned min_c, CephContext *cct_ = NULL) :
+    total_priority(0), max_tokens_per_subqueue(max_per), min_cost(min_c), cct(cct_), dm_queue(cct_) {
 
       //dmclock set system throughput to 1500 iops
       //dm_queue.set_system_throughput(max_tokens_per_subqueue);
+
       dm_queue.set_system_throughput(1500);
     }
 
@@ -816,12 +857,16 @@ class PrioritizedQueue {
   }
 
   void enqueue_dmClock(K cl, unsigned slo_reserve, unsigned slo_prop,
-      unsigned slo_limit, unsigned cost, T item) {
+      unsigned slo_limit, unsigned cost,  T item) { //int64_t delta, int64_t rho,
+//    if(cct){
+//	ldout(cct, 0) << __func__<< "client_id: "<< cl << " cost " << cost << " reserve " << slo_reserve
+//        	  << " prop " << slo_prop << " limit " << slo_limit << dendl;
+//    }
     dm_queue.enqueue(cl, SLO(slo_reserve, slo_prop, slo_limit), cost, item);
   }
 
   void enqueue_front_dmClock(K cl, unsigned slo_reserve, unsigned slo_prop,
-      unsigned slo_limit, unsigned cost, T item) {
+      unsigned slo_limit, unsigned cost, T item) { //, int64_t delta, int64_t rho
     dm_queue.enqueue(cl, SLO(slo_reserve, slo_prop, slo_limit), cost, item);
   }
 
@@ -848,21 +893,31 @@ class PrioritizedQueue {
     return queue.empty() && high_queue.empty() && dm_queue.empty();
   }
 
-  T dequeue_dmClock() {
-    assert(!empty());
-    if (!(high_queue.empty())) {
-      T ret = high_queue.rbegin()->second.front().second;
-      high_queue.rbegin()->second.pop_front();
-      if (high_queue.rbegin()->second.empty())
-	high_queue.erase(high_queue.rbegin()->first);
-      return ret;
-    }
+//  T dequeue_dmClock() {
+//    assert(!empty());
+//    if (!(high_queue.empty())) {
+//      T ret = high_queue.rbegin()->second.front().second;
+//      high_queue.rbegin()->second.pop_front();
+//      if (high_queue.rbegin()->second.empty())
+//	high_queue.erase(high_queue.rbegin()->first);
+//      return ret;
+//    }
 
+  T dequeue_dmClock(int& tag_type) {
+     assert(!empty());
+     tag_type = Q_NONE;
+     if (!(high_queue.empty())) {
+       T ret = high_queue.rbegin()->second.front().second;
+       high_queue.rbegin()->second.pop_front();
+       if (high_queue.rbegin()->second.empty())
+ 	high_queue.erase(high_queue.rbegin()->first);
+       return ret;
+     }
     // priority levels are treated as prop share
     assert(!(dm_queue.empty()));
-    T ret = dm_queue.pop_front();
-    status = dm_queue.print_status();
-    return ret;
+    std::pair<T, tag_types_t> ret = dm_queue.pop_front();
+    tag_type = ret.second;
+    return ret.first;
   }
 
   T dequeue() {
@@ -910,7 +965,7 @@ class PrioritizedQueue {
   }
 
   std::string get_status() {
-    return status;
+    return dm_queue.print_status();
   }
 
   void dump(Formatter *f) const {
@@ -935,8 +990,13 @@ class PrioritizedQueue {
       f->close_section();
     }
     f->close_section();
+    f->open_object_section("dm_clock");
+    dm_queue.dump(f);
+    f->close_section();
   }
 
 };
 
+//#pragma pop_macro("dout_prefix")
+//#pragma pop_macro("dout_subsys")
 #endif
