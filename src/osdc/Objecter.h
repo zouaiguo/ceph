@@ -1881,7 +1881,9 @@ private:
     osd_timeout(osd_timeout),
     op_throttle_bytes(cct, "objecter_bytes", cct->_conf->objecter_inflight_op_bytes),
     op_throttle_ops(cct, "objecter_ops", cct->_conf->objecter_inflight_ops),
-    epoch_barrier(0)
+    epoch_barrier(0),
+    dmclock_delta(1),
+    dmclock_rho(1)
   { }
   ~Objecter();
 
@@ -2597,6 +2599,10 @@ private:
   epoch_t epoch_barrier;
 public:
   void set_epoch_barrier(epoch_t epoch);
+private: //dmclock specific
+  int64_t dmclock_delta;
+  int64_t dmclock_rho;
 };
+
 
 #endif

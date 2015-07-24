@@ -388,6 +388,13 @@ struct entity_inst_t {
     ::decode(name, bl);
     ::decode(addr, bl);
   }
+  //for dm_clock
+  void dump(Formatter *f) const{
+    //f->open_object_section("entity_inst_t");
+    name.dump(f);
+    addr.dump(f);
+    //f->close_section();
+  }
 };
 WRITE_CLASS_ENCODER(entity_inst_t)
 

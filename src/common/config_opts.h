@@ -324,9 +324,9 @@ OPTION(client_max_inline_size, OPT_U64, 4096)
 OPTION(client_inject_release_failure, OPT_BOOL, false)  // synthetic client bug for testing
 OPTION(client_inject_fixed_oldest_tid, OPT_BOOL, false)  // synthetic client bug for testing
 
-
+//dmclock: client's slo parameter
 OPTION(client_slo_iops_reserve, OPT_U32, 0) // no reservation IOPS
-OPTION(client_slo_iops_prop, OPT_U32, 100) // default proportion 100 IOPS
+OPTION(client_slo_iops_prop, OPT_U32, 10) // default proportion share 10 IOPS
 OPTION(client_slo_iops_limit, OPT_U32, 0) // no upper limit IOPS
 
 // note: the max amount of "in flight" dirty data is roughly (max - target)
@@ -577,8 +577,9 @@ OPTION(osd_disk_thread_ioprio_class, OPT_STR, "") // rt realtime be best effort 
 OPTION(osd_disk_thread_ioprio_priority, OPT_INT, -1) // 0-7
 OPTION(osd_recovery_threads, OPT_INT, 1)
 OPTION(osd_recover_clone_overlap, OPT_BOOL, true)   // preserve clone_overlap during recovery/migration
-OPTION(osd_op_num_threads_per_shard, OPT_INT, 2)
-OPTION(osd_op_num_shards, OPT_INT, 5)
+
+OPTION(osd_op_num_threads_per_shard, OPT_INT, 2) //dmclock edit, default: 2
+OPTION(osd_op_num_shards, OPT_INT, 1)  //dmclock edit, default:5
 
 OPTION(osd_read_eio_on_bad_digest, OPT_BOOL, true) // return EIO if object digest is bad
 
@@ -686,6 +687,10 @@ OPTION(osd_pg_object_context_cache_count, OPT_INT, 64)
 
 // determines whether PGLog::check() compares written out log to stored log
 OPTION(osd_debug_pg_log_writeout, OPT_BOOL, false)
+
+// default osd throughput
+OPTION(osd_max_throughput, OPT_INT, 100) // dmclock specific
+
 
 // default timeout while caling WaitInterval on an empty queue
 OPTION(threadpool_default_timeout, OPT_INT, 60)

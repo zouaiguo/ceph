@@ -143,6 +143,8 @@ public:
       if (ignore_out_data)
 	ops[i].outdata.clear();
     }
+    //dmclock
+    set_dmclock_service_tag(req->get_dmclock_service_tag());
   }
 private:
   ~MOSDOpReply() {}
@@ -190,6 +192,7 @@ public:
       ::encode(replay_version, payload);
       ::encode(user_version, payload);
       ::encode(redirect, payload);
+      ::encode(service_tag, payload); //dmclock
     }
   }
   virtual void decode_payload() {
@@ -245,6 +248,8 @@ public:
 
       if (header.version >= 6)
 	::decode(redirect, p);
+
+      ::decode(service_tag, p); //dmclock
     }
   }
 

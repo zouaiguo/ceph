@@ -8203,10 +8203,19 @@ bool OSD::op_is_discardable(MOSDOp *op)
 void OSD::enqueue_op(PG *pg, OpRequestRef& op)
 {
   utime_t latency = ceph_clock_now(cct) - op->get_req()->get_recv_stamp();
-  dout(15) << "enqueue_op " << op << " prio " << op->get_req()->get_priority()
-    << " cost " << op->get_req()->get_cost()
-    << " latency " << latency
-    << " " << *(op->get_req()) << dendl;
+//      dout(15) << "enqueue_op " << op << " prio " << op->get_req()->get_priority()
+//          << " cost " << op->get_req()->get_cost()
+//          << " latency " << latency
+//          << " " << *(op->get_req()) << dendl;
+  //dmclock specific
+  dout(0) << "enqueue_op " << op << " prio:" << op->get_req()->get_priority()
+      << " msg type: " << op->get_req()->get_type_name()
+      << " R: " << op->get_req()->get_dmclock_slo_reserve()
+      << " P: " << op->get_req()->get_dmclock_slo_prop()
+      << " L: " << op->get_req()->get_dmclock_slo_limit()
+      << " latency: " << latency
+      << " req: "<<*(op->get_req()) << dendl;
+
   pg->queue_op(op);
 }
 
@@ -8229,9 +8238,10 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
       return;
     }
   }
-  //  pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue();
   //dmclock specific
-  pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue_dmClock();
+  //  pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue();
+  int service_tag = -1;
+  pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue_dmClock(service_tag);
 
   sdata->pg_for_processing[&*(item.first)].push_back(item.second);
   sdata->sdata_op_ordering_lock.Unlock();
@@ -8252,6 +8262,8 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
     sdata->pg_for_processing[&*(item.first)].pop_front();
     if (!(sdata->pg_for_processing[&*(item.first)].size()))
       sdata->pg_for_processing.erase(&*(item.first));
+    //dmclock
+    op->set_service_tag(service_tag);
   }  
 
   // osd:opwq_process marks the point at which an operation has been dequeued
@@ -8267,15 +8279,17 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
 	reqid.name._num, reqid.tid, reqid.inc);
   }
 
-  lgeneric_subdout(osd->cct, osd, 30) << "dequeue status: ";
-  Formatter *f = Formatter::create("json");
-  f->open_object_section("q");
-  dump(f);
-  f->close_section();
-  f->flush(*_dout);
-  delete f;
-  *_dout << dendl;
-
+  //lgeneric_subdout(osd->cct, osd, 30) << "dequeue status: ";
+  if(service_tag >= 0 ){
+      lgeneric_subdout(osd->cct, osd, 0) << "dequeue status: ";
+      Formatter *f = Formatter::create("json-pretty"); //"json"
+      f->open_object_section("q");
+      dump(f);
+      f->close_section();
+      f->flush(*_dout);
+      delete f;
+      *_dout << dendl;
+  }
   op->run(osd, item.first, tp_handle);
 
   {
@@ -8318,7 +8332,15 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
     sdata->pqueue.enqueue_dmClock(
 	item.second.get_owner(),
 	reservation, prop, limit, cost, item);
-    //dout(0) <<"enqueue back dmclock " << dendl;
+    //dmclock debug
+//    lgeneric_subdout(osd->cct, osd, 0) << "enqueue status: ";
+//    Formatter *f = Formatter::create("json-pretty"); //"json"
+//    f->open_object_section("q");
+//    dump(f);
+//    f->close_section();
+//    f->flush(*_dout);
+//    delete f;
+//    *_dout << dendl;
   }
 
   sdata->sdata_op_ordering_lock.Unlock();
@@ -8358,8 +8380,15 @@ void OSD::ShardedOpWQ::_enqueue_front(pair<PGRef, PGQueueable> item) {
     //      priority, cost, item);
     sdata->pqueue.enqueue_dmClock(item.second.get_owner(), reservation,
 	prop, limit, cost, item);
-
-    //dout(0) <<"enqueue front dmclock " << dendl;
+//    //dmclock debug
+//    lgeneric_subdout(osd->cct, osd, 0) << "enqueue front status: ";
+//    Formatter *f = Formatter::create("json-pretty"); //"json"
+//    f->open_object_section("q");
+//    dump(f);
+//    f->close_section();
+//    f->flush(*_dout);
+//    delete f;
+//    *_dout << dendl;
   }
   sdata->sdata_op_ordering_lock.Unlock();
   sdata->sdata_lock.Lock();

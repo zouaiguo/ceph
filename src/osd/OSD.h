@@ -400,6 +400,7 @@ class PGQueueable {
   entity_inst_t get_owner() const {
     return owner;
   }
+  //dmclock specific
   unsigned get_reservation() const{
     return reservation;
   }
@@ -408,6 +409,13 @@ class PGQueueable {
   }
   unsigned get_limit() const{
     return limit;
+  }
+  void set_service_tag(int service_tag){
+    OpRequestRef *op = boost::get<OpRequestRef>(&qvariant);
+    if(op){
+	//Message * m = (*op)->get_req();
+	(*op)->get_req()->set_dmclock_service_tag(service_tag);
+    }
   }
 };
 
@@ -1678,10 +1686,10 @@ class ShardedOpWQ: public ShardedThreadPool::ShardedWQ<
 		       map<PG*, list<PGQueueable> > pg_for_processing;
 		       PrioritizedQueue<pair<PGRef, PGQueueable>, entity_inst_t> pqueue;
 		       ShardData(string lock_name, string ordering_lock,
-			   uint64_t max_tok_per_prio, uint64_t min_cost) :
+			   uint64_t max_tok_per_prio, uint64_t min_cost, uint64_t osd_max_throughput) :
 			 sdata_lock(lock_name.c_str()), sdata_op_ordering_lock(
 			     ordering_lock.c_str()), pqueue(max_tok_per_prio,
-			     min_cost) {
+			     min_cost, osd_max_throughput) {
 			     }
 		     };
 
@@ -1703,7 +1711,8 @@ class ShardedOpWQ: public ShardedThreadPool::ShardedWQ<
 			       "OSD:ShardedOpWQ:order:", i);
 			   ShardData* one_shard = new ShardData(lock_name, order_lock,
 			       osd->cct->_conf->osd_op_pq_max_tokens_per_priority,
-			       osd->cct->_conf->osd_op_pq_min_cost);
+			       osd->cct->_conf->osd_op_pq_min_cost,
+			       osd->cct->_conf->osd_max_throughput);
 			   shard_list.push_back(one_shard);
 			 }
 		       }
@@ -1766,7 +1775,6 @@ class ShardedOpWQ: public ShardedThreadPool::ShardedWQ<
 		       sdata->sdata_op_ordering_lock.Lock();
 		       //dmclock specific
 		       //sdata->pqueue.remove_by_filter(Pred(pg));
-
 		       sdata->pqueue.remove_by_filter_dmClock(Pred(pg));
 
 		       sdata->pg_for_processing.erase(pg);
@@ -1784,9 +1792,9 @@ class ShardedOpWQ: public ShardedThreadPool::ShardedWQ<
 		       sdata->sdata_op_ordering_lock.Lock();
 
 		       //dmclock specific
-
 		       //sdata->pqueue.remove_by_filter(Pred(pg), &_dequeued);
 		       sdata->pqueue.remove_by_filter_dmClock(Pred(pg), &_dequeued);
+
 		       for (list<pair<PGRef, PGQueueable> >::iterator i =
 			   _dequeued.begin(); i != _dequeued.end(); ++i) {
 			 boost::optional<OpRequestRef> mop = i->second.maybe_get_op();

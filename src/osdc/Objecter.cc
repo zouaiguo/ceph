@@ -2053,8 +2053,10 @@ void Objecter::_send_op_account(Op *op)
   logger->inc(l_osdc_op_active);
   logger->inc(l_osdc_op);
 
-  if ((op->target.flags & (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE)) == (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE))
+  if ((op->target.flags & (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE)) == (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE)){
     logger->inc(l_osdc_op_rmw);
+    dmclock_delta++; //dmclock specific
+  }
   else if (op->target.flags & CEPH_OSD_FLAG_WRITE)
     logger->inc(l_osdc_op_w);
   else if (op->target.flags & CEPH_OSD_FLAG_READ)
@@ -2901,6 +2903,16 @@ void Objecter::unregister_op(Op *op)
 void Objecter::handle_osd_op_reply(MOSDOpReply *m)
 {
   ldout(cct, 10) << "in handle_osd_op_reply" << dendl;
+
+  //dmclock specific.
+  //note: not sure whether it's the right way to update R-tag
+  if(m->get_dmclock_service_tag() == 0){ // R-tag=0, P-tag=1
+      dmclock_rho++;
+      ldout(cct, 0) << "in handle_osd_op_reply: R-tag got serviced "
+	  <<" delta "<< dmclock_delta
+	  <<" rho "<< dmclock_rho
+	  << dendl;
+  }
 
   // get pio
   ceph_tid_t tid = m->get_tid();

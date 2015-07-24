@@ -296,6 +296,7 @@ struct ceph_osd_request_head {
       ::encode(dmclock_slo_reserve, payload);
       ::encode(dmclock_slo_prop, payload);
       ::encode(dmclock_slo_limit, payload);
+      ::encode(service_tag, payload);
     }
   }
 
