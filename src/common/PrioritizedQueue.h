@@ -222,9 +222,11 @@ class PrioritizedQueue {
       Requests requests;
       unsigned throughput_available, aggregated_p_throughput, osd_max_throughput;
       int64_t size;
+      bool purge_required;
       int64_t virtual_clock;
+      utime_t when_idled_oldest, when_purged_oldest;
 
-      // structure to hold deadline tag for each client
+      // structure for deadline-tag for each client
       struct Tag {
 	double_t r_deadline, r_spacing;
 	double_t p_deadline, p_spacing;
@@ -233,24 +235,25 @@ class PrioritizedQueue {
 	tag_types_t selected_tag;
 	K cl;
 	SLO slo;
+	utime_t when_idled;
 	int64_t delta; //total IO done in-between two consecutive request to this cl
 	int64_t rho; //total r-IO done in-between two consecutive request to this cl
 
 	Tag(K _cl, SLO _slo) :
 	  r_deadline(0), r_spacing(0), p_deadline(0), p_spacing(0), l_deadline(
 	      0), l_spacing(0), active(true), selected_tag(
-		T_NONE), cl(_cl), slo(_slo), delta(0), rho(0) {
+		T_NONE), cl(_cl), slo(_slo), when_idled(ceph_clock_now(NULL)), delta(0), rho(0) {
 	      }
 	Tag(utime_t t) :
 	  r_deadline(t), r_spacing(0), p_deadline(t), p_spacing(0), l_deadline(
 	      t), l_spacing(0), active(true), selected_tag(
-		T_NONE), delta(0), rho(0) {
+		T_NONE), when_idled(ceph_clock_now(NULL)), delta(0), rho(0) {
 	      }
 
 	Tag(int64_t t) :
 	  r_deadline(t), r_spacing(0), p_deadline(t), p_spacing(0), l_deadline(
 	      t), l_spacing(0), active(true), selected_tag(
-		T_NONE), delta(0), rho(0) {
+		T_NONE), when_idled(ceph_clock_now(NULL)), delta(0), rho(0) {
 	      }
       };
       typedef std::vector<Tag> Schedule;
@@ -270,6 +273,7 @@ class PrioritizedQueue {
 	}
       };
       Deadline min_tag_r, min_tag_p;
+      Tag * oldest_idle_tag;
 
       void create_new_tag(K cl, SLO slo) {
 	Tag tag(cl, slo);
@@ -292,11 +296,11 @@ class PrioritizedQueue {
 	}
 	schedule.push_back(tag);
 	recalc_prop_spacing();
-	update_min_deadlines();
+	find_min_deadlines();
       }
 
       //straight forward update-rule from paper
-      void update_active_tag(size_t cl_index) {
+      void update_current_tag(size_t cl_index) {
 	Tag *tag = &schedule[cl_index];
 
 	if (tag->selected_tag == T_RESERVE) {
@@ -309,36 +313,34 @@ class PrioritizedQueue {
 	if (tag->l_deadline) {
 	  tag->l_deadline = tag->l_deadline + tag->l_spacing;
 	}
-	update_min_deadlines();
+	find_min_deadlines();
       }
 
-      // a separate function to update idle tags
-      // for better performance. 'cl' reclaims throughput.
+      // a separate function to update idle tags for better performance.
+      //note: the mclock paper makes an error in updating idle client.
       void update_idle_tag(size_t cl_index) {
-	int64_t now = get_current_clock();
+	double_t now = get_current_clock();
 	Tag *tag = &schedule[cl_index];
 	tag->active = true;
-	reserve_all_throughput(*tag);
+	if(tag == oldest_idle_tag){ // reset purge_required flag
+	    purge_required = false;
+	    oldest_idle_tag = NULL;
+	}
+	if (tag->r_deadline)
+	  tag->r_deadline = MAX(tag->r_deadline , now);
+	if (tag->p_deadline)
+	  tag->p_deadline = MAX(tag->p_deadline , now);
+	if (tag->l_deadline)
+	  tag->l_deadline = MAX(tag->l_deadline , now);
 
-	if (tag->r_deadline) {
-	  tag->r_deadline = std::max((tag->r_deadline + tag->r_spacing),
-	      (double_t) now);
-	}
-	if (tag->p_deadline) {
-	  tag->p_deadline = min_tag_p.deadline ? min_tag_p.deadline : now;
-	}
-	if (tag->l_deadline) {
-	  tag->l_deadline = std::max((tag->l_deadline + tag->l_spacing),
-	      (double_t) now);
-	}
-	update_min_deadlines();
+	find_min_deadlines();
       }
 
       // the heart of dm_clock algorithm. it sweeps through the schedule vector
       // and identifies minimum R and P tags at current time-stamp.
       // note: this function will be called every time (before dequeue,
       // after client addition, idle client becomes active, etc.). so keep it fast.
-      void update_min_deadlines() {
+      void find_min_deadlines() {
 	min_tag_r.valid = min_tag_p.valid = false;
 	size_t index = 0;
 	for (typename Schedule::iterator it = schedule.begin();
@@ -353,7 +355,7 @@ class PrioritizedQueue {
 	    if (min_tag_r.valid) {
 	      if (min_tag_r.deadline >= tag.r_deadline)
 		min_tag_r.set_values(index, tag.r_deadline);
-	    } else {
+	    } else {//min_tag_r was not set before
 	      min_tag_r.set_values(index, tag.r_deadline);
 	    }
 	  }
@@ -362,7 +364,7 @@ class PrioritizedQueue {
 	    if (min_tag_p.valid) {
 	      if (min_tag_p.deadline >= tag.p_deadline)
 		min_tag_p.set_values(index, tag.p_deadline);
-	    } else {
+	    } else {//min_tag_p was not set before
 	      min_tag_p.set_values(index, tag.p_deadline);
 	    }
 	  }
@@ -372,12 +374,15 @@ class PrioritizedQueue {
       // if no tag is eligible to pick at current time-stamp
       void issue_idle_cycle() {
 	increment_clock();
-	update_min_deadlines();
+	find_min_deadlines();
       }
 
       double_t calc_prop_throughput(double_t prop) const {
+	//assert(aggregated_p_throughput !=0 );
+	if(throughput_available <= 0)
+	  return 0;
 	if (aggregated_p_throughput && prop) {
-	  if (prop <= aggregated_p_throughput)
+	  if (prop < aggregated_p_throughput)
 	    return throughput_available * (prop / aggregated_p_throughput);
 	  else
 	    return throughput_available;
@@ -389,10 +394,12 @@ class PrioritizedQueue {
 	double_t prop;
 	for (typename Schedule::iterator it = schedule.begin();
 	    it != schedule.end(); ++it) {
-	  if (it->active && it->slo.prop ) {
+	  if (it->slo.prop ) { //it->active
 	    prop = calc_prop_throughput(it->slo.prop);
-	    assert(prop > 0);
-	    it->p_spacing = (double_t) get_osd_max_throughput() / prop;
+	    if(prop > 0)
+	      it->p_spacing = (double_t) get_osd_max_throughput() / prop;
+	    else // no available throughput
+	      it->p_deadline = 0; //disable current P-tag
 	  }
 	}
       }
@@ -445,16 +452,26 @@ class PrioritizedQueue {
     public:
       SubQueueDMClock(const SubQueueDMClock &other) :
 	requests(other.requests), throughput_available(
-	    other.throughput_available), aggregated_p_throughput(
-	      other.aggregated_p_throughput), osd_max_throughput(
-		other.osd_max_throughput), size(other.size), schedule(
-		  other.schedule), virtual_clock(other.virtual_clock){
-		}
+	other.throughput_available), aggregated_p_throughput(
+	other.aggregated_p_throughput), osd_max_throughput(
+	other.osd_max_throughput), size(other.size), schedule(
+	other.schedule), purge_required(other.purge_required),
+	virtual_clock(other.virtual_clock),
+	when_idled_oldest(other.when_purged_oldest),
+	when_purged_oldest(other.when_purged_oldest),
+	oldest_idle_tag(other.oldest_idle_tag){
+      }
 
       SubQueueDMClock() :
-	throughput_available(0), aggregated_p_throughput(0), osd_max_throughput(
-	    0), size(0), virtual_clock(1) {
-	}
+	throughput_available(0),
+	aggregated_p_throughput(0),
+	osd_max_throughput( 0),
+	size(0), purge_required(false),
+	virtual_clock(1),
+	when_idled_oldest(ceph_clock_now(NULL)),
+	when_purged_oldest(utime_t(0,0)),
+	oldest_idle_tag(NULL){
+      }
 
       int64_t get_current_clock() const{
 	//should call ceph_time_now()
@@ -469,6 +486,7 @@ class PrioritizedQueue {
 	osd_max_throughput = mt;
 	throughput_available = mt;
       }
+
       unsigned get_osd_max_throughput() const {
 	return osd_max_throughput;
       }
@@ -479,18 +497,15 @@ class PrioritizedQueue {
 
       void release_r_throughput(unsigned t) {
 	throughput_available += t;
-	if (throughput_available > osd_max_throughput)
-	  throughput_available = osd_max_throughput;
+	//if (throughput_available > osd_max_throughput)
+	  //throughput_available = osd_max_throughput;
       }
 
       // need further work, i.e. admission control
       void reserve_r_throughput(unsigned t) {
-	assert(throughput_available >= t);
+	// throughput_avaailable could be -ve
+	throughput_available -= t;
 
-	if (throughput_available > t)
-	  throughput_available -= t;
-	else
-	  throughput_available = 0;
       }
 
       void release_p_throughput(unsigned t) {
@@ -503,58 +518,65 @@ class PrioritizedQueue {
 	aggregated_p_throughput += t;
       }
 
-      void reserve_all_throughput(Tag tag){
-	if(tag.slo.reserve)
-	  reserve_r_throughput(tag.slo.reserve);
-	if(tag.slo.prop)
-	  reserve_p_throughput(tag.slo.prop);
-	recalc_prop_spacing();
-      }
-
-      void release_all_throughput(Tag tag){
-	if(tag.slo.reserve)
-	  release_r_throughput(tag.slo.reserve);
-	if(tag.slo.prop)
-	  release_p_throughput(tag.slo.prop);
-	recalc_prop_spacing();
-      }
-
-      void purge_idle_clients() {
-	bool update_required = false;
-	typename Schedule::iterator it = schedule.begin();
-	for (; it != schedule.end();) {
-	  if (!it->active) {
-	    update_required = true;
-	    if (it->slo.reserve)
-	      release_r_throughput(it->slo.reserve);
-	    if (it->slo.prop)
-	      release_p_throughput(it->slo.prop);
-	    //clean-up
-	    requests.erase(it->cl);
-	    it = schedule.erase(it);
-	  } else {
-	    ++it;
-	  }
+      //if a tag is idle for last >5 sec, it's eligible for purging
+      bool is_purge_required() {
+	if(purge_required && (oldest_idle_tag != NULL) ){
+	  utime_t now = ceph_clock_now(NULL);
+	  now -= when_idled_oldest;
+	  if(now > utime_t(5,0) )
+	    return true;
+	  else return false;
 	}
-	if (update_required)
-	  recalc_prop_spacing();
+	return false;
+      }
+
+      //if idle_tag is NULL, then it purges all tags that are idle
+      void purge_idle_clients(bool has_grace_time = true) {
+	typename Schedule::iterator it = schedule.begin();
+	utime_t now = ceph_clock_now(NULL);
+	utime_t cut_off = utime_t(5,0);
+	now -= when_idled_oldest;
+	for (; it != schedule.end();) {
+	  if (it->active) {
+	    ++it;
+	    continue;
+	  }
+	  if((now - it->when_idled) <= cut_off ){
+	    ++it;
+	    continue;
+	  }
+	  if (it->slo.reserve)
+	    release_r_throughput(it->slo.reserve);
+	  if (it->slo.prop)
+	    release_p_throughput(it->slo.prop);
+	  //clean-up
+	  requests.erase(it->cl);
+	  it = schedule.erase(it);
+	}
+	oldest_idle_tag = NULL;
+	purge_required = false;
+	when_purged_oldest = ceph_clock_now(NULL);
+	recalc_prop_spacing();
       }
 
       template<class F>
-	void remove_by_filter(F f, std::list<T> *out) {
-	  bool purge_required = false;
+      void remove_by_filter(F f, std::list<T> *out) {
+	  bool _purge_required = false;
 	  for (typename Requests::iterator i = requests.begin(); i != requests.end(); ++i) {
 	    size -= filter_list_pairs(&(i->second), f, out);
 	    if (i->second.empty()) {
 	      size_t index;
 	      if(get_client_index( i->first, index)){
 		schedule[index].active = false;
-		purge_required = true;
+		_purge_required = true;
 	      }
 	    }
 	  }
-	  if(purge_required)
+	  //unconditional purge
+	  if(_purge_required){
+	    oldest_idle_tag = NULL; //purge all idle tags
 	    purge_idle_clients();
+	  }
 	}
 
       void remove_by_class(K k, std::list<T> *out) {
@@ -568,6 +590,8 @@ class PrioritizedQueue {
 	    out->push_front(j->second);
 	  }
 	}
+	//unconditional purge
+	oldest_idle_tag = NULL; //remove all idle tags
 	purge_idle_clients();
       }
 
@@ -594,12 +618,13 @@ class PrioritizedQueue {
 	return NULL;
       }
 
+      //the dm_clock dequeue process
       std::pair<T, tag_types_t> pop_front() {
 	assert((size != 0));
 	size_t cl_index;
 	Tag *tag = front(cl_index);
 
-	// issue idle cycle
+	//TODO: issue idle cycle
 	while (size && tag == NULL) {
 	  issue_idle_cycle();
 	  tag = front(cl_index);
@@ -611,15 +636,17 @@ class PrioritizedQueue {
 
 	T ret = requests[tag->cl].front().second;
 	requests[tag->cl].pop_front();
-
-	//release resources if cl becomes idle
 	if (requests[tag->cl].empty()){
 	  tag->active = false;
-	  release_all_throughput(*tag);
+	  if(!purge_required){
+	    purge_required = true;
+	    when_idled_oldest = ceph_clock_now(NULL);
+	    oldest_idle_tag = tag;
+	  }
 	}
-
+	// management routine
 	increment_clock();
-	update_active_tag(cl_index);
+	update_current_tag(cl_index);
 	size--;
 	return std::make_pair(ret, tag->selected_tag);
       }
@@ -668,9 +695,9 @@ class PrioritizedQueue {
       void dump(Formatter *f) const {
 	f->dump_int("system_throughput", osd_max_throughput);
 	f->dump_int("available throughput", throughput_available);
-	f->dump_int("num_req", size);
 	f->dump_int("num_client", schedule.size());
 	f->dump_int("num_map", requests.size());
+	f->dump_int("num_req", size);
 	f->dump_int("cur_clock", get_current_clock());
 
 	f->open_array_section("dm_queue");
@@ -685,10 +712,24 @@ class PrioritizedQueue {
 	    std::ostringstream data;
 	    data <<"["<< schedule[i].r_deadline << "(+"<< schedule[i].r_spacing <<"), "
 		<< schedule[i].p_deadline << "(+"<< schedule[i].p_spacing <<"), "
-	    	    << schedule[i].l_deadline << "(+"<< schedule[i].l_spacing <<")"<< " ]";
+	    	    << schedule[i].l_deadline << "(+"<< schedule[i].l_spacing <<")"<< " ]"
+		    <<" SLO( "<< schedule[i].slo.reserve <<" , "<< schedule[i].slo.prop
+		    <<" , " << schedule[i].slo.limit <<" )";
+
 	    f->dump_string("deadline",  data.str());
 	    f->close_section(); //client_iops
 	}
+	f->open_object_section("purge");
+	std::ostringstream data;
+	utime_t now = ceph_clock_now(NULL);
+	f->dump_bool("purge_required", purge_required);
+	data << " last_time_idled: " << when_idled_oldest << std::endl
+	    <<" last_time_purged: "<< when_purged_oldest << std::endl
+	    << " time_after_being_idle: "<< (now - when_idled_oldest) << std::endl
+	    << " time_from_last_purge: "<< (now - when_purged_oldest);
+
+	f->dump_string("purge", data.str());
+	f->close_section(); //purge
 	f->close_section(); //dm_queue
       }
 
@@ -937,8 +978,12 @@ class PrioritizedQueue {
     return ret;
   }
 
-  // some one (a deamon or timer) will purge the idle clients
-  // periodically
+  //osd deamon or timer will check this condition periodically
+  bool purge_required_dmClock(){
+    return dm_queue.is_purge_required();
+  }
+
+  //purging idle client(s) from internal scheduler
   void purge_dmClock() {
     dm_queue.purge_idle_clients();
   }

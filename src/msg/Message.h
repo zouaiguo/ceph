@@ -259,6 +259,9 @@ protected:
 
   friend class Messenger;
 
+  //dmclock specific
+  __s8 service_tag;
+
 public:
   Message()
     : connection(NULL),
@@ -266,7 +269,8 @@ public:
       completion_hook(NULL),
       byte_throttler(NULL),
       msg_throttler(NULL),
-      dispatch_throttle_size(0) {
+      dispatch_throttle_size(0),
+      service_tag(-1) {
     memset(&header, 0, sizeof(header));
     memset(&footer, 0, sizeof(footer));
   }
@@ -276,7 +280,8 @@ public:
       completion_hook(NULL),
       byte_throttler(NULL),
       msg_throttler(NULL),
-      dispatch_throttle_size(0) {
+      dispatch_throttle_size(0),
+      service_tag(-1){
     memset(&header, 0, sizeof(header));
     header.type = t;
     header.version = version;
@@ -459,11 +464,17 @@ public:
   void encode(uint64_t features, int crcflags);
 
   //dmclock specific
-  virtual __u32 get_dmClock_param_delta() const{ return 0; }
-  virtual  __u32 get_dmClock_param_rho() const { return 0;}
-  virtual  __u32 get_dmclock_slo_reserve() const { return 0;}
-  virtual  __u32 get_dmclock_slo_prop() const { return 0;}
-  virtual  __u32 get_dmclock_slo_limit() const { return 0;}
+  virtual unsigned get_dmClock_param_delta() const{ return 0; }
+  virtual unsigned get_dmClock_param_rho() const { return 0;}
+  virtual unsigned get_dmclock_slo_reserve() const { return 0;}
+  virtual unsigned get_dmclock_slo_prop() const { return 0;}
+  virtual unsigned get_dmclock_slo_limit() const { return 0;}
+  virtual void set_dmclock_service_tag(int tag_type){
+    service_tag = (signed char)tag_type;
+  }
+  virtual int get_dmclock_service_tag() const{
+      return (int)service_tag;;
+  }
 
 };
 typedef boost::intrusive_ptr<Message> MessageRef;

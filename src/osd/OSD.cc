@@ -8234,6 +8234,8 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
     sdata->sdata_lock.Unlock();
     sdata->sdata_op_ordering_lock.Lock();
     if(sdata->pqueue.empty()) {
+      if(sdata->pqueue.purge_required_dmClock())
+	sdata->pqueue.purge_dmClock();
       sdata->sdata_op_ordering_lock.Unlock();
       return;
     }

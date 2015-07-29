@@ -75,9 +75,10 @@ struct osd_info_t {
   epoch_t up_thru;   // lower bound on actual osd death (if > up_from)
   epoch_t down_at;   // upper bound on actual osd death (if > up_from)
   epoch_t lost_at;   // last epoch we decided data was "lost"
+  int64_t num_ios;   // dmclock specific
   
   osd_info_t() : last_clean_begin(0), last_clean_end(0),
-		 up_from(0), up_thru(0), down_at(0), lost_at(0) {}
+		 up_from(0), up_thru(0), down_at(0), lost_at(0), num_ios(0) {}
 
   void dump(Formatter *f) const;
   void encode(bufferlist& bl) const;

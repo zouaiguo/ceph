@@ -2803,8 +2803,7 @@ MOSDOp *Objecter::_prepare_osd_op(Op *op)
 
   //dmclock specific
   m->set_dmclock_slo(cct->_conf->client_slo_iops_reserve,
-		     //cct->_conf->client_slo_iops_prop,
-		  	  m->get_priority(), //set priority as prop share
+		     cct->_conf->client_slo_iops_prop, //m->get_priority(), //set priority as prop share
 		     cct->_conf->client_slo_iops_limit);
 
   logger->inc(l_osdc_op_send);

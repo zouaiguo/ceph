@@ -432,7 +432,7 @@ $DAEMONOPTS
         osd class dir = $OBJCLASS_PATH
         osd scrub load threshold = 5.0
         osd debug op order = true
-	osd max throughput = 1500
+	osd max throughput = 500
 	osd op num threads per shard = 1
 	osd op num shards = 1
         filestore wbthrottle xfs ios start flusher = 10
