@@ -256,6 +256,7 @@ class PrioritizedQueue {
 		T_NONE), when_idled(ceph_clock_now(NULL)), delta(0), rho(0) {
 	      }
       };
+      Tag * oldest_idle_tag;
       typedef std::vector<Tag> Schedule;
       Schedule schedule;
 
@@ -273,7 +274,7 @@ class PrioritizedQueue {
 	}
       };
       Deadline min_tag_r, min_tag_p;
-      Tag * oldest_idle_tag;
+      std::map<K, size_t> client_map;
 
       void create_new_tag(K cl, SLO slo) {
 	Tag tag(cl, slo);
@@ -294,6 +295,7 @@ class PrioritizedQueue {
 	    min_tag_p.deadline ?
 	    min_tag_p.deadline : get_current_clock();
 	}
+	client_map[cl] = schedule.size(); //index in vector
 	schedule.push_back(tag);
 	recalc_prop_spacing();
 	find_min_deadlines();
@@ -402,21 +404,6 @@ class PrioritizedQueue {
 	      it->p_deadline = 0; //disable current P-tag
 	  }
 	}
-      }
-
-      // utility function to find the index in scheduler vector of client cl
-      // note: this function will only get called when an idle client becomes active.
-      bool get_client_index(K cl, size_t &index) {
-	bool is_found = false;
-	for (typename Schedule::iterator it = schedule.begin();
-	    it != schedule.end(); ++it) {
-	  if (it->cl == cl) {
-	    index = it - schedule.begin();
-	    is_found = true;
-	    break;
-	  }
-	}
-	return is_found;
       }
 
       //helper function
@@ -530,18 +517,20 @@ class PrioritizedQueue {
 	return false;
       }
 
-      //if idle_tag is NULL, then it purges all tags that are idle
+
       void purge_idle_clients(bool has_grace_time = true) {
 	typename Schedule::iterator it = schedule.begin();
 	utime_t now = ceph_clock_now(NULL);
 	utime_t cut_off = utime_t(5,0);
 	now -= when_idled_oldest;
-	for (; it != schedule.end();) {
+	for (size_t index = 0; it != schedule.end();) {
 	  if (it->active) {
+	    client_map[it->cl] = index++;
 	    ++it;
 	    continue;
 	  }
-	  if((now - it->when_idled) <= cut_off ){
+	  if(has_grace_time && (now - it->when_idled) <= cut_off ){
+	    client_map[it->cl] = index++;
 	    ++it;
 	    continue;
 	  }
@@ -551,6 +540,7 @@ class PrioritizedQueue {
 	    release_p_throughput(it->slo.prop);
 	  //clean-up
 	  requests.erase(it->cl);
+	  client_map.erase(it->cl);
 	  it = schedule.erase(it);
 	}
 	oldest_idle_tag = NULL;
@@ -565,17 +555,14 @@ class PrioritizedQueue {
 	  for (typename Requests::iterator i = requests.begin(); i != requests.end(); ++i) {
 	    size -= filter_list_pairs(&(i->second), f, out);
 	    if (i->second.empty()) {
-	      size_t index;
-	      if(get_client_index( i->first, index)){
-		schedule[index].active = false;
-		_purge_required = true;
-	      }
+	      Tag * tag = &schedule[client_map[i->first]];
+	      tag->active = false;
+	      tag->when_idled = ceph_clock_now(NULL);
+	      _purge_required = true;
 	    }
 	  }
-	  //unconditional purge
 	  if(_purge_required){
-	    oldest_idle_tag = NULL; //purge all idle tags
-	    purge_idle_clients();
+	    purge_idle_clients(false);
 	  }
 	}
 
@@ -590,9 +577,10 @@ class PrioritizedQueue {
 	    out->push_front(j->second);
 	  }
 	}
-	//unconditional purge
-	oldest_idle_tag = NULL; //remove all idle tags
-	purge_idle_clients();
+	Tag *tag = schedule[client_map[i->first]];
+	tag->active = false;
+	tag->when_idled = ceph_clock_now(NULL);
+	purge_idle_clients(false);
       }
 
       Tag* front(size_t &out) {
@@ -657,10 +645,7 @@ class PrioritizedQueue {
 	  create_new_tag(cl, slo);
 	} else {//idle or active
 	  if (requests[cl].empty()) {//idle
-	    size_t index = 0;
-	    bool found = get_client_index(cl, index);
-	    assert(found != false);
-	    update_idle_tag(index);
+	    update_idle_tag(client_map[cl]);
 	  }
 	}
 	requests[cl].push_back(std::make_pair(cost, item));
@@ -673,10 +658,7 @@ class PrioritizedQueue {
 	  create_new_tag(cl, slo);
 	} else {
 	  if (requests[cl].empty()) {
-	    size_t index = 0;
-	    bool found = get_client_index(cl, index);
-	    assert(found != false);
-	    update_idle_tag(index);
+	    update_idle_tag(client_map[cl]);
 	  }
 	}
 	requests[cl].push_front(std::make_pair(cost, item));
