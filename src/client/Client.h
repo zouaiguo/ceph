@@ -290,7 +290,9 @@ public:
   void resend_unsafe_requests(MetaSession *s);
 
   // mds requests
-  ceph_tid_t last_tid, last_flush_seq;
+  ceph_tid_t last_tid;
+  ceph_tid_t oldest_tid; // oldest incomplete mds request, excluding setfilelock requests
+  ceph_tid_t last_flush_seq;
   map<ceph_tid_t, MetaRequest*> mds_requests;
 
   void dump_mds_requests(Formatter *f);
@@ -301,6 +303,7 @@ public:
 		   Inode **ptarget = 0, bool *pcreated = 0,
 		   int use_mds=-1, bufferlist *pdirbl=0);
   void put_request(MetaRequest *request);
+  void unregister_request(MetaRequest *request);
 
   int verify_reply_trace(int r, MetaRequest *request, MClientReply *reply,
 			 Inode **ptarget, bool *pcreated, int uid, int gid);
@@ -319,6 +322,7 @@ public:
   void kick_requests_closed(MetaSession *session);
   void handle_client_request_forward(MClientRequestForward *reply);
   void handle_client_reply(MClientReply *reply);
+  bool is_dir_operation(MetaRequest *request);
 
   bool   initialized;
   bool   authenticated;
@@ -554,6 +558,7 @@ protected:
   void get_cap_ref(Inode *in, int cap);
   void put_cap_ref(Inode *in, int cap);
   void flush_snaps(Inode *in, bool all_again=false, CapSnap *again=0);
+  void wait_sync_caps(Inode *in, uint16_t flush_tid[]);
   void wait_sync_caps(uint64_t want);
   void queue_cap_snap(Inode *in, SnapContext &old_snapc);
   void finish_cap_snap(Inode *in, CapSnap *capsnap, int used);
@@ -635,14 +640,13 @@ private:
 
   Fh *_create_fh(Inode *in, int flags, int cmode);
   int _release_fh(Fh *fh);
+  void _put_fh(Fh *fh);
 
 
   struct C_Readahead : public Context {
     Client *client;
     Fh *f;
-    C_Readahead(Client *c, Fh *f)
-      : client(c),
-	f(f) { }
+    C_Readahead(Client *c, Fh *f);
     void finish(int r);
   };
 
@@ -674,9 +678,12 @@ private:
 	      bool *created = NULL, int uid=-1, int gid=-1);
   loff_t _lseek(Fh *fh, loff_t offset, int whence);
   int _read(Fh *fh, int64_t offset, uint64_t size, bufferlist *bl);
-  int _write(Fh *fh, int64_t offset, uint64_t size, const char *buf);
+  int _write(Fh *fh, int64_t offset, uint64_t size, const char *buf,
+          const struct iovec *iov, int iovcnt);
+  int _preadv_pwritev(int fd, const struct iovec *iov, unsigned iovcnt, int64_t offset, bool write);
   int _flush(Fh *fh);
   int _fsync(Fh *fh, bool syncdataonly);
+  int _fsync(Inode *in, bool syncdataonly);
   int _sync_fs();
   int _fallocate(Fh *fh, int mode, int64_t offset, int64_t length);
   int _getlk(Fh *fh, struct flock *fl, uint64_t owner);
@@ -842,7 +849,9 @@ public:
   int close(int fd);
   loff_t lseek(int fd, loff_t offset, int whence);
   int read(int fd, char *buf, loff_t size, loff_t offset=-1);
+  int preadv(int fd, const struct iovec *iov, int iovcnt, loff_t offset=-1);
   int write(int fd, const char *buf, loff_t size, loff_t offset=-1);
+  int pwritev(int fd, const struct iovec *iov, int iovcnt, loff_t offset=-1);
   int fake_write_size(int fd, loff_t size);
   int ftruncate(int fd, loff_t size);
   int fsync(int fd, bool syncdataonly);
@@ -920,6 +929,7 @@ public:
   int ll_listxattr(Inode *in, char *list, size_t size, int uid=-1, int gid=-1);
   int ll_opendir(Inode *in, dir_result_t **dirpp, int uid = -1, int gid = -1);
   int ll_releasedir(dir_result_t* dirp);
+  int ll_fsyncdir(dir_result_t* dirp);
   int ll_readlink(Inode *in, char *buf, size_t bufsize, int uid = -1, int gid = -1);
   int ll_mknod(Inode *in, const char *name, mode_t mode, dev_t rdev,
 	       struct stat *attr, Inode **out, int uid = -1, int gid = -1);

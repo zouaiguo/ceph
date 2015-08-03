@@ -66,15 +66,15 @@ public:
       image_watcher(NULL),
       refresh_seq(0),
       last_refresh(0),
-      owner_lock("librbd::ImageCtx::owner_lock"),
-      md_lock("librbd::ImageCtx::md_lock"),
-      cache_lock("librbd::ImageCtx::cache_lock"),
-      snap_lock("librbd::ImageCtx::snap_lock"),
-      parent_lock("librbd::ImageCtx::parent_lock"),
-      refresh_lock("librbd::ImageCtx::refresh_lock"),
-      object_map_lock("librbd::ImageCtx::object_map_lock"),
-      async_ops_lock("librbd::ImageCtx::async_ops_lock"),
-      copyup_list_lock("librbd::ImageCtx::copyup_list_lock"),
+      owner_lock(unique_lock_name("librbd::ImageCtx::owner_lock", this)),
+      md_lock(unique_lock_name("librbd::ImageCtx::md_lock", this)),
+      cache_lock(unique_lock_name("librbd::ImageCtx::cache_lock", this)),
+      snap_lock(unique_lock_name("librbd::ImageCtx::snap_lock", this)),
+      parent_lock(unique_lock_name("librbd::ImageCtx::parent_lock", this)),
+      refresh_lock(unique_lock_name("librbd::ImageCtx::refresh_lock", this)),
+      object_map_lock(unique_lock_name("librbd::ImageCtx::object_map_lock", this)),
+      async_ops_lock(unique_lock_name("librbd::ImageCtx::async_ops_lock", this)),
+      copyup_list_lock(unique_lock_name("librbd::ImageCtx::copyup_list_lock", this)),
       extra_read_flags(0),
       old_format(true),
       order(0), size(0), features(0),
@@ -84,7 +84,7 @@ public:
       object_cacher(NULL), writeback_handler(NULL), object_set(NULL),
       readahead(),
       total_bytes_read(0), copyup_finisher(NULL),
-      object_map(*this), aio_work_queue(NULL)
+      object_map(*this), aio_work_queue(NULL), op_work_queue(NULL)
   {
     md_ctx.dup(p);
     data_ctx.dup(p);
@@ -100,6 +100,9 @@ public:
     aio_work_queue = new ContextWQ("librbd::aio_work_queue",
                                    cct->_conf->rbd_op_thread_timeout,
                                    thread_pool_singleton);
+    op_work_queue = new ContextWQ("librbd::op_work_queue",
+                                  cct->_conf->rbd_op_thread_timeout,
+                                  thread_pool_singleton);
   }
 
   ImageCtx::~ImageCtx() {
@@ -122,6 +125,7 @@ public:
     }
     delete[] format_string;
 
+    delete op_work_queue;
     delete aio_work_queue;
   }
 
@@ -568,18 +572,23 @@ public:
   int ImageCtx::get_parent_overlap(snap_t in_snap_id, uint64_t *overlap) const
   {
     assert(snap_lock.is_locked());
-    if (in_snap_id == CEPH_NOSNAP && !async_resize_reqs.empty() &&
-        async_resize_reqs.front()->shrinking()) {
-      *overlap = async_resize_reqs.front()->get_parent_overlap();
-      return 0;
-    }
-
     const parent_info *info = get_parent_info(in_snap_id);
     if (info) {
       *overlap = info->overlap;
       return 0;
     }
     return -ENOENT;
+  }
+
+  uint64_t ImageCtx::get_copyup_snap_id() const
+  {
+    assert(snap_lock.is_locked());
+    // copyup requires the largest possible parent overlap,
+    // which is always the oldest snapshot (if any).
+    if (!snaps.empty()) {
+      return snaps.back();
+    }
+    return CEPH_NOSNAP;
   }
 
   void ImageCtx::aio_read_from_cache(object_t o, uint64_t object_no,
@@ -639,6 +648,7 @@ public:
   }
 
   void ImageCtx::flush_cache_aio(Context *onfinish) {
+    assert(owner_lock.is_locked());
     cache_lock.Lock();
     object_cacher->flush_set(object_set, onfinish);
     cache_lock.Unlock();
@@ -661,10 +671,13 @@ public:
     return r;
   }
 
-  void ImageCtx::shutdown_cache() {
+  int ImageCtx::shutdown_cache() {
     flush_async_operations();
-    invalidate_cache(true);
+
+    RWLock::RLocker owner_locker(owner_lock);
+    int r = invalidate_cache(true);
     object_cacher->stop();
+    return r;
   }
 
   int ImageCtx::invalidate_cache(bool purge_on_error) {
@@ -687,7 +700,7 @@ public:
 
   void ImageCtx::invalidate_cache(Context *on_finish) {
     if (object_cacher == NULL) {
-      on_finish->complete(0);
+      op_work_queue->queue(on_finish, 0);
       return;
     }
 
@@ -716,7 +729,8 @@ public:
                  << unclean << " bytes remain" << dendl;
       r = -EBUSY;
     }
-    on_finish->complete(r);
+
+    op_work_queue->queue(on_finish, r);
   }
 
   void ImageCtx::clear_nonexistence_cache() {
@@ -737,22 +751,6 @@ public:
     image_watcher->unregister_watch();
     delete image_watcher;
     image_watcher = NULL;
-  }
-
-  size_t ImageCtx::parent_io_len(uint64_t offset, size_t length,
-				 snap_t in_snap_id)
-  {
-    uint64_t overlap = 0;
-    get_parent_overlap(in_snap_id, &overlap);
-
-    size_t parent_len = 0;
-    if (get_parent_pool_id(in_snap_id) != -1 && offset <= overlap)
-      parent_len = min(overlap, offset + length) - offset;
-
-    ldout(cct, 20) << __func__ << " off = " << offset << " len = " << length
-		   << " overlap = " << overlap << " parent_io_len = "
-		   << parent_len << dendl;
-    return parent_len;
   }
 
   uint64_t ImageCtx::prune_parent_extents(vector<pair<uint64_t,uint64_t> >& objectx,
@@ -784,21 +782,15 @@ public:
   }
 
   void ImageCtx::flush_async_operations(Context *on_finish) {
-    bool complete = false;
-    {
-      Mutex::Locker l(async_ops_lock);
-      if (async_ops.empty()) {
-        complete = true;
-      } else {
-        ldout(cct, 20) << "flush async operations: " << on_finish << " "
-                       << "count=" << async_ops.size() << dendl;
-        async_ops.front()->add_flush_context(on_finish);
-      }
+    Mutex::Locker l(async_ops_lock);
+    if (async_ops.empty()) {
+      op_work_queue->queue(on_finish, 0);
+      return;
     }
 
-    if (complete) {
-      on_finish->complete(0);
-    }
+    ldout(cct, 20) << "flush async operations: " << on_finish << " "
+                   << "count=" << async_ops.size() << dendl;
+    async_ops.front()->add_flush_context(on_finish);
   }
 
   void ImageCtx::cancel_async_requests() {
@@ -930,5 +922,6 @@ public:
     ASSIGN_OPTION(blacklist_on_break_lock);
     ASSIGN_OPTION(blacklist_expire_seconds);
     ASSIGN_OPTION(request_timed_out_seconds);
+    ASSIGN_OPTION(enable_alloc_hint);
   }
 }

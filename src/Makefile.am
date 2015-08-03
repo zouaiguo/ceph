@@ -1,7 +1,7 @@
 include Makefile-env.am
 
 SUBDIRS += ocf java tracing
-DIST_SUBDIRS += gmock ocf libs3 java tracing
+DIST_SUBDIRS += gmock ocf java tracing
 
 if NO_GIT_VERSION
 export NO_VERSION="yes"
@@ -39,6 +39,7 @@ include rbd_replay/Makefile.am
 include test/Makefile.am
 include tools/Makefile.am
 include Makefile-rocksdb.am
+include compressor/Makefile.am
 
 
 # shell scripts
@@ -78,6 +79,7 @@ EXTRA_DIST += \
 	$(srcdir)/make_version \
 	$(srcdir)/.git_version \
 	$(srcdir)/ceph-rbdnamer \
+	$(srcdir)/tools/ceph-monstore-update-crush.sh \
 	$(srcdir)/upstart/ceph-all.conf \
 	$(srcdir)/upstart/ceph-mon.conf \
 	$(srcdir)/upstart/ceph-mon-all.conf \
@@ -107,23 +109,6 @@ EXTRA_DIST += \
 	yasm-wrapper
 
 EXTRA_DIST += \
-	libs3/COPYING \
-	libs3/ChangeLog \
-	libs3/GNUmakefile \
-	libs3/GNUmakefile.mingw \
-	libs3/GNUmakefile.osx \
-	libs3/INSTALL \
-	libs3/LICENSE \
-	libs3/README \
-	libs3/TODO \
-	libs3/archlinux \
-	libs3/debian \
-	libs3/doxyfile \
-	libs3/inc \
-	libs3/libs3.spec \
-	libs3/mswin \
-	libs3/src \
-	libs3/test \
 	unittest_bufferlist.sh
 
 

@@ -205,6 +205,9 @@ class KeyValueStore : public ObjectStore,
 
   Finisher ondisk_finisher;
 
+  RWLock collections_lock;
+  set<coll_t> collections;
+
   Mutex lock;
 
   int _create_current();
@@ -219,18 +222,6 @@ class KeyValueStore : public ObjectStore,
     char n[100];
     snprintf(n, 100, "%lld", (long long)no);
     return string(n);
-  }
-
-  // A special coll used by store collection info, each obj in this coll
-  // represent a coll_t
-  static bool is_coll_obj(coll_t c) {
-    return c == coll_t("COLLECTIONS");
-  }
-  static coll_t get_coll_for_coll() {
-    return coll_t("COLLECTIONS");
-  }
-  static ghobject_t make_ghobject_for_coll(const coll_t &col) {
-    return ghobject_t(hobject_t(sobject_t(col.to_str(), CEPH_NOSNAP)));
   }
 
   // Each transaction has side effect which may influent the following
@@ -254,6 +245,12 @@ class KeyValueStore : public ObjectStore,
     KeyValueStore *store;
 
     KeyValueDB::Transaction t;
+
+    void set_collections(const set<coll_t>& collections) {
+      bufferlist collections_bl;
+      ::encode(collections, collections_bl);
+      t->set("meta", "collections", collections_bl);
+    }
 
     int lookup_cached_header(const coll_t &cid, const ghobject_t &oid,
                              StripObjectMap::StripObjectHeaderRef *strip_header,
@@ -450,6 +447,7 @@ class KeyValueStore : public ObjectStore,
       store->op_queue.pop_front();
       return osr;
     }
+    using ThreadPool::WorkQueue<OpSequencer>::_process;
     void _process(OpSequencer *osr, ThreadPool::TPHandle &handle) {
       store->_do_op(osr, handle);
     }
@@ -581,6 +579,7 @@ class KeyValueStore : public ObjectStore,
 
   void start_sync() {}
   void sync() {}
+  using ObjectStore::sync;
   void flush() {}
   void sync_and_flush() {}
 
@@ -597,10 +596,6 @@ class KeyValueStore : public ObjectStore,
   int _rmattr(coll_t cid, const ghobject_t& oid, const char *name,
               BufferTransaction &t);
   int _rmattrs(coll_t cid, const ghobject_t& oid, BufferTransaction &t);
-
-  int collection_getattr(coll_t c, const char *name, void *value, size_t size);
-  int collection_getattr(coll_t c, const char *name, bufferlist& bl);
-  int collection_getattrs(coll_t cid, map<string,bufferptr> &aset);
 
   int _collection_setattr(coll_t c, const char *name, const void *value,
                           size_t size, BufferTransaction &t);
@@ -647,6 +642,9 @@ class KeyValueStore : public ObjectStore,
   ObjectMap::ObjectMapIterator get_omap_iterator(coll_t c,
                                                  const ghobject_t &oid);
 
+  int check_get_rc(const coll_t cid, const ghobject_t& oid, int r, bool is_equal_size);
+  void dump_start(const std::string file);
+  void dump_stop();
   void dump_transactions(list<ObjectStore::Transaction*>& ls, uint64_t seq,
                          OpSequencer *osr);
 
@@ -683,6 +681,9 @@ class KeyValueStore : public ObjectStore,
   int m_keyvaluestore_strip_size;
   uint64_t m_keyvaluestore_max_expected_write_size;
   int do_update;
+  bool m_keyvaluestore_do_dump;
+  std::ofstream m_keyvaluestore_dump;
+  JSONFormatter m_keyvaluestore_dump_fmt;
 
   static const string OBJECT_STRIP_PREFIX;
   static const string OBJECT_XATTR;

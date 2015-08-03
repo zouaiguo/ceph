@@ -8,7 +8,7 @@ AC_PREREQ(2.59)
 # VERSION define is not used by the code.  It gets a version string
 # from 'git describe'; see src/ceph_ver.[ch]
 
-AC_INIT([ceph], [9.0.0], [ceph-devel@vger.kernel.org])
+AC_INIT([ceph], [9.0.2], [ceph-devel@vger.kernel.org])
 
 # Create release string.  Used with VERSION for RPMs.
 RPM_RELEASE=0
@@ -50,8 +50,8 @@ AM_PROG_LIBTOOL
 AM_PROG_AS
 
 
+AM_INIT_AUTOMAKE([foreign parallel-tests])
 # enable make V=0 (if automake >1.11)
-AM_INIT_AUTOMAKE([foreign])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 # Platform
@@ -268,25 +268,36 @@ ACX_PTHREAD
 
 AC_CHECK_LIB([uuid], [uuid_parse], [true], AC_MSG_FAILURE([libuuid not found]))
 
-# rbd {map,unmap,showmapped} dependencies, Linux only
-if test x"$linux" = x"yes" -a x"$with_rbd" = x"yes"; then
+#Linux only dependencies
+if test x"$linux" = x"yes"; then
   # libblkid
   AC_CHECK_HEADER([blkid/blkid.h], [],
     AC_MSG_ERROR([blkid/blkid.h not found (libblkid-dev, libblkid-devel)]))
-  AC_CHECK_LIB([blkid], [blkid_devno_to_wholedisk], [true],
+  AC_CHECK_LIB([blkid], [blkid_get_cache], [true],
+    AC_MSG_FAILURE([libblkid not found]))
+  AC_CHECK_LIB([blkid], [blkid_find_dev_with_tag], [true],
+    AC_MSG_FAILURE([libblkid not found]))
+  AC_CHECK_LIB([blkid], [blkid_dev_devname], [true],
     AC_MSG_FAILURE([libblkid not found]))
 
-  # libudev
-  AC_CHECK_HEADER([libudev.h], [],
-    AC_MSG_ERROR([libudev.h not found (libudev-dev, libudev-devel)]))
-  AC_CHECK_LIB([udev], [udev_monitor_receive_device], [true],
-    AC_MSG_FAILURE([libudev not found]))
+  # rbd {map,unmap,showmapped} dependencies, Linux only
+  if test x"$with_rbd" = x"yes"; then
+    # libblkid
+    AC_CHECK_LIB([blkid], [blkid_devno_to_wholedisk], [true],
+      AC_MSG_FAILURE([libblkid not found]))
 
-  # libexpat
-  AC_CHECK_HEADER([expat.h], [],
-    AC_MSG_ERROR([expat.h not found (libexpat-devel)]))
-  AC_CHECK_LIB([expat], [XML_Parse], [true],
-    AC_MSG_FAILURE([libexpat not found]))
+    # libudev
+    AC_CHECK_HEADER([libudev.h], [],
+      AC_MSG_ERROR([libudev.h not found (libudev-dev, libudev-devel)]))
+    AC_CHECK_LIB([udev], [udev_monitor_receive_device], [true],
+      AC_MSG_FAILURE([libudev not found]))
+
+    # libexpat
+    AC_CHECK_HEADER([expat.h], [],
+      AC_MSG_ERROR([expat.h not found (libexpat-devel)]))
+    AC_CHECK_LIB([expat], [XML_Parse], [true],
+      AC_MSG_FAILURE([libexpat not found]))
+  fi
 fi
 
 #
@@ -432,7 +443,7 @@ AS_IF([test "$with_profiler" = "yes"],
 
 # debug crap?
 AC_ARG_WITH([debug],
-            [AS_HELP_STRING([--with-debug], [build extra debug binaries])],
+            [AS_HELP_STRING([--with-debug], [build extra debug binaries and tests])],
             [case "${withval}" in
 		  yes) with_debug=yes ;;
 		  no)  with_debug=no ;;
@@ -629,9 +640,9 @@ if test "x$enable_cephfs_java" = "xyes"; then
         # the search path.
         AS_IF([test "x$with_debug" = "xyes"], [
         	dir='/usr/share/java'
-	        junit4_jar=`find $dir -name junit4.jar | head -n 1`
+	        junit4_jar=`( find $dir -name junit4.jar;find $dir -name junit.jar ) | head -n 1`
 		AS_IF([test -r "$junit4_jar"], [
-		      EXTRA_CLASSPATH_JAR=`dirname $junit4_jar`/junit4.jar
+		      EXTRA_CLASSPATH_JAR="$junit4_jar"
 		      AC_SUBST(EXTRA_CLASSPATH_JAR)
 		      [have_junit4=1]], [
 		      AC_MSG_NOTICE([Cannot find junit4.jar (apt-get install junit4)])
@@ -801,24 +812,6 @@ if test "x$with_jemalloc" = "xyes"; then
 			        --with-librocksdb-static or --with-jemalloc])
 	fi
 fi
-
-# use system libs3?
-AC_ARG_WITH([system-libs3],
-	[AS_HELP_STRING([--with-system-libs3], [use system libs3])],
-	,
-	[with_system_libs3=no])
-AS_IF([test "x$with_system_libs3" = xyes],
-            [AC_CHECK_LIB([s3], [S3_initialize], [true], [AC_MSG_FAILURE([libs3 not found])], [-lpthread])])
-AS_IF([test "x$with_system_libs3" = xcheck],
-            [AC_SEARCH_LIBS([S3_initialize], [s3], [with_system_libs3=yes], [true], [-lpthread])])
-AM_CONDITIONAL(WITH_SYSTEM_LIBS3, [ test "$with_system_libs3" = "yes" ])
-
-# rest-bench?
-AC_ARG_WITH([rest-bench],
-	    [AS_HELP_STRING([--with-rest-bench], [enables rest-bench])],
-	    [],
-	    [with_rest_bench=no])
-AM_CONDITIONAL(WITH_REST_BENCH, [ test "$with_rest_bench" = "yes" ])
 
 # needs libcurl and libxml2
 if test "x$with_rest_bench" = xyes && test "x$with_system_libs3" = xno; then
@@ -1154,11 +1147,14 @@ AC_ARG_ENABLE([valgrind],
               [AS_HELP_STRING([--enable-valgrind], [enable valgrind unit tests])],
               [enable_valgrind=$enableval], [enable_valgrind=])
 AC_CHECK_PROG(HAVE_VALGRIND, valgrind, yes)
-AS_IF([test "x$HAVE_VALGRIND" = "x"],
-  AS_IF([test "x$enable_valgrind" = "xyes"], [AC_MSG_ERROR([valgrind not found])]),
+AS_IF(
+  [test "x$HAVE_VALGRIND" = "x"], AS_IF([test "x$enable_valgrind" = "xyes"], [AC_MSG_ERROR([valgrind not found])]),
   [test "x$enable_valgrind" = "x"], [enable_valgrind=yes])
 
 AM_CONDITIONAL([VALGRIND_ENABLED], [test "x$enable_valgrind" = "xyes"])
+if test "x$enable_valgrind" = "xyes"; then
+  AC_CHECK_HEADERS([valgrind/helgrind.h])
+fi
 
 dnl systemd-libexec-dir
 AC_SUBST(systemd_libexec_dir)

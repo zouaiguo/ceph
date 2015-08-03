@@ -316,14 +316,11 @@ add_subdirectory(cls)
 
 # RADOS client/library
 set(osdc_files
-  osdc/Objecter.cc)
+  osdc/Objecter.cc
+  osdc/Filer.cc)
 set(osdc_rbd_files
   osdc/ObjectCacher.cc
   osdc/Striper.cc)
-if(${WITH_CLIENT})
-  list(APPEND osdc_files
-    osdc/Filer.cc)
-endif(${WITH_CLIENT})
 add_library(osdc_rbd_objs OBJECT ${osdc_rbd_files})
 add_library(osdc STATIC ${osdc_files} $<TARGET_OBJECTS:osdc_rbd_objs>)
 
@@ -340,6 +337,7 @@ add_library(librados ${CEPH_SHARED} ${librados_srcs}
   $<TARGET_OBJECTS:common_util_obj>)
 add_dependencies(librados osdc)
 target_link_libraries(librados PRIVATE osdc osd os global common cls_lock_client
+  ${BLKID_LIBRARIES}
   ${CRYPTO_LIBS} ${EXTRALIBS} ${TCMALLOC_LIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0
@@ -355,20 +353,63 @@ install(FILES include/rados/librados.h
   DESTINATION include/rados)
 install(TARGETS librados DESTINATION lib)
 
+set(libradosstriper_srcs
+  libradosstriper/libradosstriper.cc
+  libradosstriper/RadosStriperImpl.cc
+  libradosstriper/MultiAioCompletionImpl.cc)
+add_library(libradosstriper ${libradosstriper_srcs})
+target_link_libraries(libradosstriper librados cls_lock_client)
+
 set(rados_srcs
   tools/rados/rados.cc
-  tools/rados/rados_sync.cc
-  tools/rados/rados_import.cc
-  tools/rados/rados_export.cc
+  tools/RadosDump.cc
+  tools/rados/RadosImport.cc
+  tools/rados/PoolDump.cc
   common/obj_bencher.cc)
 add_executable(rados ${rados_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(rados librados global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+target_link_libraries(rados librados global ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} libradosstriper)
+
+if (WITH_CEPHFS)
+  set(cephfs_journal_tool_srcs
+    tools/cephfs/cephfs-journal-tool.cc
+    tools/cephfs/JournalTool.cc
+    tools/cephfs/JournalFilter.cc
+    tools/cephfs/JournalScanner.cc
+    tools/cephfs/EventOutput.cc
+    tools/cephfs/Dumper.cc
+    tools/cephfs/Resetter.cc
+    tools/cephfs/MDSUtility.cc)
+  add_executable(cephfs-journal-tool ${cephfs_journal_tool_srcs}
+                 $<TARGET_OBJECTS:heap_profiler_objs>)
+  target_link_libraries(cephfs-journal-tool librados mds osdc global
+                        ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+
+  set(cephfs_table_tool_srcs
+    tools/cephfs/cephfs-table-tool.cc
+    tools/cephfs/TableTool.cc
+    tools/cephfs/MDSUtility.cc)
+  add_executable(cephfs-table-tool ${cephfs_table_tool_srcs}
+                 $<TARGET_OBJECTS:heap_profiler_objs>)
+  target_link_libraries(cephfs-table-tool librados mds osdc global
+                        ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+
+  set(cephfs_data_scan_srcs
+    tools/cephfs/cephfs-data-scan.cc
+    tools/cephfs/DataScan.cc
+    tools/cephfs/MDSUtility.cc)
+  add_executable(cephfs-data-scan ${cephfs_data_scan_srcs}
+                 $<TARGET_OBJECTS:heap_profiler_objs>)
+
+  target_link_libraries(cephfs-data-scan librados mds osdc global
+                        cls_cephfs_client
+                        ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+endif (WITH_CEPHFS)
 
 set(librados_config_srcs
   librados-config.cc)
 add_executable(librados-config ${librados_config_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(librados-config librados global ${CMAKE_DL_LIBS}
+target_link_libraries(librados-config librados global ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS})
 
 install(TARGETS rados librados-config DESTINATION bin)
@@ -486,7 +527,7 @@ set(ceph_osd_srcs
 add_executable(ceph-osd ${ceph_osd_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   $<TARGET_OBJECTS:common_util_obj>)
-target_link_libraries(ceph-osd osd os global ${TCMALLOC_LIBS})
+target_link_libraries(ceph-osd osd os global ${BLKID_LIBRARIES} ${TCMALLOC_LIBS})
 install(TARGETS ceph-osd DESTINATION bin)
 
 # MDS
@@ -536,6 +577,11 @@ if(${WITH_MDS})
 endif(${WITH_MDS})
 
 add_subdirectory(erasure-code)
+
+set(crushtool_srcs
+    tools/crushtool.cc)
+add_executable(crushtool ${crushtool_srcs})
+target_link_libraries(crushtool global)
 
 # Support/Tools
 add_subdirectory(gmock)
@@ -615,6 +661,10 @@ install(PROGRAMS
   ${CMAKE_SOURCE_DIR}/src/ceph-disk-udev
   DESTINATION sbin)
 
+set(parse_secret_files
+  common/secret.c)
+add_library(parse_secret_objs OBJECT ${parse_secret_files})
+
 if(WITH_LIBCEPHFS)
   set(libclient_srcs
     client/Client.cc
@@ -642,8 +692,8 @@ if(WITH_LIBCEPHFS)
   set(mount_ceph_srcs
     mount/mount.ceph.c)
   add_executable(mount.ceph ${mount_ceph_srcs}
-    $<TARGET_OBJECTS:common_mountcephfs_objs>
-    $<TARGET_OBJECTS:rbd_mountcephfs_objs>)
+    $<TARGET_OBJECTS:parse_secret_objs>
+    $<TARGET_OBJECTS:common_mountcephfs_objs>)
   target_link_libraries(mount.ceph keyutils)
 
   install(TARGETS ceph-syn DESTINATION bin)
@@ -692,14 +742,11 @@ if(${WITH_RBD})
   install(TARGETS librados librbd DESTINATION lib)
   set(rbd_srcs
     rbd.cc common/TextTable.cc)
-  set(rbd_mountcephfs_files
-    common/secret.c)
-  add_library(rbd_mountcephfs_objs OBJECT ${rbd_mountcephfs_files})
   add_executable(rbd ${rbd_srcs} $<TARGET_OBJECTS:common_util_obj>
-    $<TARGET_OBJECTS:rbd_mountcephfs_objs>
+    $<TARGET_OBJECTS:parse_secret_objs>
     $<TARGET_OBJECTS:heap_profiler_objs>)
   set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
-  target_link_libraries(rbd global librbd librados common keyutils udev
+  target_link_libraries(rbd librbd librados common keyutils udev
     ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
   install(TARGETS rbd DESTINATION bin)
   install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer DESTINATION bin)
@@ -779,14 +826,15 @@ if(${WITH_RADOSGW})
     rgw/rgw_main.cc)
 
   set(radosgw_admin_srcs
-    rgw/rgw_admin.cc)
+    rgw/rgw_admin.cc
+    rgw/rgw_orphan.cc)
 
   add_executable(radosgw ${radosgw_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
   target_link_libraries(radosgw rgw_a librados
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
     cls_replica_log_client cls_user_client
-    curl expat global fcgi resolv ${TCMALLOC_LIBS})
+    curl expat global fcgi resolv ${BLKID_LIBRARIES} ${TCMALLOC_LIBS})
   install(TARGETS radosgw DESTINATION bin)
 
   add_executable(radosgw-admin ${radosgw_admin_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
@@ -794,6 +842,6 @@ if(${WITH_RADOSGW})
     cls_rgw_client cls_lock_client cls_refcount_client
     cls_log_client cls_statelog_client cls_version_client
     cls_replica_log_client cls_user_client
-    curl expat global fcgi resolv ${TCMALLOC_LIBS})
+    curl expat global fcgi resolv ${BLKID_LIBRARIES} ${TCMALLOC_LIBS})
   install(TARGETS radosgw-admin DESTINATION bin)
 endif(${WITH_RADOSGW})

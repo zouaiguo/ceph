@@ -140,6 +140,12 @@ private:
   int get_index(coll_t c, Index *index);
   int init_index(coll_t c);
 
+  void _kludge_temp_object_collection(coll_t& cid, const ghobject_t& oid) {
+    if (oid.hobj.pool < -1 && !cid.is_temp())
+      cid = cid.get_temp();
+  }
+  void init_temp_collections();
+
   // ObjectMap
   boost::scoped_ptr<ObjectMap> object_map;
   
@@ -357,6 +363,7 @@ private:
     void _process(OpSequencer *osr, ThreadPool::TPHandle &handle) {
       store->_do_op(osr, handle);
     }
+    using ThreadPool::WorkQueue<OpSequencer>::_process;
     void _process_finish(OpSequencer *osr) {
       store->_finish_op(osr);
     }
@@ -552,7 +559,7 @@ public:
 		   const SequencerPosition& spos);
   int _do_clone_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff);
   int _do_sparse_copy_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff);
-  int _do_copy_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff);
+  int _do_copy_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff, bool skip_sloppycrc=false);
   int _remove(coll_t cid, const ghobject_t& oid, const SequencerPosition &spos);
 
   int _fgetattr(int fd, const char *name, bufferptr& bp);
@@ -564,6 +571,7 @@ public:
   void do_force_sync();
   void start_sync(Context *onsafe);
   void sync();
+  using JournalingObjectStore::sync;
   void _flush_op_queue();
   void flush();
   void sync_and_flush();
@@ -610,6 +618,7 @@ public:
 
   // collections
   int list_collections(vector<coll_t>& ls);
+  int list_collections(vector<coll_t>& ls, bool include_temp);
   int collection_version_current(coll_t c, uint32_t *version);
   int collection_stat(coll_t c, struct stat *st);
   bool collection_exists(coll_t c);
@@ -636,7 +645,6 @@ public:
 		      set<string> *out);
   ObjectMap::ObjectMapIterator get_omap_iterator(coll_t c, const ghobject_t &oid);
 
-  int _create_collection(coll_t c);
   int _create_collection(coll_t c, const SequencerPosition &spos);
   int _destroy_collection(coll_t c);
   /**
@@ -804,6 +812,7 @@ public:
   virtual int do_fiemap(int fd, off_t start, size_t len, struct fiemap **pfiemap) = 0;
   virtual int clone_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff) = 0;
   virtual int set_alloc_hint(int fd, uint64_t hint) = 0;
+  virtual bool has_splice() const = 0;
 
   // hooks for (sloppy) crc tracking
   virtual int _crc_update_write(int fd, loff_t off, size_t len, const bufferlist& bl) = 0;

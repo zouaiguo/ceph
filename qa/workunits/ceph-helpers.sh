@@ -189,13 +189,15 @@ function test_teardown() {
 # @return 0 on success, 1 on error
 #
 function kill_daemons() {
+    local trace=$(shopt -q -o xtrace && echo true || echo false)
+    $trace && shopt -u -o xtrace
     local dir=$1
     local signal=${2:-KILL}
     local name_prefix=$3 # optional, osd, mon, osd.1
     local delays=${4:-0 0 1 1 1 2 3 5 5 5 10 10 20 60}
 
     local status=0
-    for pidfile in $(find $dir | grep $name_prefix'[^/]*\.pid') ; do
+    for pidfile in $(find $dir 2>/dev/null | grep $name_prefix'[^/]*\.pid') ; do
         pid=$(cat $pidfile)
         local send_signal=$signal
         local kill_complete=false
@@ -213,6 +215,7 @@ function kill_daemons() {
             status=1
         fi
     done
+    $trace && shopt -s -o xtrace
     return $status
 }
 
@@ -419,7 +422,6 @@ function test_run_osd() {
     run_osd $dir 0 || return 1
     local backfills=$(CEPH_ARGS='' ceph --format=json daemon $dir//ceph-osd.0.asok \
         config get osd_max_backfills)
-    test "$backfills" = '{"osd_max_backfills":"10"}' || return 1
 
     run_osd $dir 1 --osd-max-backfills 20 || return 1
     local backfills=$(CEPH_ARGS='' ceph --format=json daemon $dir//ceph-osd.1.asok \
@@ -491,6 +493,7 @@ function activate_osd() {
     ceph_args+=" --osd-data=$osd_data"
     ceph_args+=" --chdir="
     ceph_args+=" --osd-pool-default-erasure-code-directory=.libs"
+    ceph_args+=" --osd-class-dir=.libs"
     ceph_args+=" --run-dir=$dir"
     ceph_args+=" --debug-osd=20"
     ceph_args+=" --log-file=$dir/\$name.log"
@@ -520,7 +523,6 @@ function test_activate_osd() {
     run_osd $dir 0 || return 1
     local backfills=$(CEPH_ARGS='' ceph --format=json daemon $dir//ceph-osd.0.asok \
         config get osd_max_backfills)
-    test "$backfills" = '{"osd_max_backfills":"10"}' || return 1
 
     kill_daemons $dir TERM osd || return 1
 
@@ -585,8 +587,10 @@ function get_osds() {
     local poolname=$1
     local objectname=$2
 
-    ceph --format xml osd map $poolname $objectname 2>/dev/null | \
-        $XMLSTARLET sel -t -m "//acting/osd" -v . -o ' '
+    local osds=$(ceph --format xml osd map $poolname $objectname 2>/dev/null | \
+        $XMLSTARLET sel -t -m "//acting/osd" -v . -o ' ')
+    # get rid of the trailing space
+    echo $osds
 }
 
 function test_get_osds() {
@@ -597,7 +601,7 @@ function test_get_osds() {
     run_osd $dir 0 || return 1
     run_osd $dir 1 || return 1
     wait_for_clean || return 1
-    get_osds rbd GROUP | grep --quiet '[0-1] [0-1] ' || return 1
+    get_osds rbd GROUP | grep --quiet '^[0-1] [0-1]$' || return 1
     teardown $dir || return 1
 }
 
@@ -1099,6 +1103,39 @@ function test_expect_failure() {
 #######################################################################
 
 ##
+# Return 0 if the erasure code *plugin* is available, 1 otherwise.
+#
+# @param plugin erasure code plugin
+# @return 0 on success, 1 on error
+#
+
+function erasure_code_plugin_exists() {
+    local plugin=$1
+
+    local status
+    if ceph osd erasure-code-profile set TESTPROFILE plugin=$plugin 2>&1 |
+        grep "$plugin.*No such file" ; then
+        status=1
+    else
+        status=0
+        ceph osd erasure-code-profile rm TESTPROFILE
+    fi
+    return $status
+}
+
+function test_erasure_code_plugin_exists() {
+    local dir=$1
+
+    setup $dir || return 1
+    run_mon $dir a || return 1
+    erasure_code_plugin_exists jerasure || return 1
+    ! erasure_code_plugin_exists FAKE || return 1
+    teardown $dir || return 1
+}
+
+#######################################################################
+
+##
 # Call the **run** function (which must be defined by the caller) with
 # the **dir** argument followed by the caller argument list.
 #
@@ -1122,8 +1159,8 @@ function main() {
     local dir=testdir/$1
     shift
 
-    set -x
-    PS4='${FUNCNAME[0]}: $LINENO: '
+    shopt -s -o xtrace
+    PS4='${BASH_SOURCE[0]}:$LINENO: ${FUNCNAME[0]}:  '
 
     export PATH=:$PATH # make sure program from sources are prefered
 
@@ -1143,8 +1180,8 @@ function main() {
 #######################################################################
 
 function run_tests() {
-    set -x
-    PS4='${FUNCNAME[0]}: $LINENO: '
+    shopt -s -o xtrace
+    PS4='${BASH_SOURCE[0]}:$LINENO: ${FUNCNAME[0]}:  '
 
     export PATH=":$PATH"
     export CEPH_MON="127.0.0.1:7109"
@@ -1167,5 +1204,5 @@ if test "$1" = TESTS ; then
 fi
 
 # Local Variables:
-# compile-command: "cd .. ; make -j4 && test/ceph-helpers.sh TESTS # test_get_config"
+# compile-command: "cd ../../src ; make -j4 && ../qa/workunits/ceph-helpers.sh TESTS # test_get_config"
 # End:

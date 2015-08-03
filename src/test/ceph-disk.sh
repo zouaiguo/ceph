@@ -17,13 +17,16 @@
 #
 source test/test_btrfs_common.sh
 
-PS4='${FUNCNAME[0]}: $LINENO: '
+PS4='${BASH_SOURCE[0]}:$LINENO: ${FUNCNAME[0]}:  '
 
 export PATH=.:$PATH # make sure program from sources are prefered
 DIR=test-ceph-disk
 virtualenv virtualenv-$DIR
 . virtualenv-$DIR/bin/activate
 (
+    # older versions of pip will not install wrap_console scripts
+    # when using wheel packages
+    pip install --upgrade 'pip >= 6.1'
     if test -d ceph-detect-init/wheelhouse ; then
         wheelhouse="--no-index --use-wheel --find-links=ceph-detect-init/wheelhouse"
     fi
@@ -224,7 +227,7 @@ function test_zap() {
     local osd_data=$DIR/dir
     $mkdir -p $osd_data
 
-    ./ceph-disk $CEPH_DISK_ARGS zap $osd_data 2>&1 | grep 'not full block device' || return 1
+    ./ceph-disk $CEPH_DISK_ARGS zap $osd_data 2>&1 | grep -q 'not full block device' || return 1
 
     $rm -fr $osd_data
 }
@@ -324,7 +327,7 @@ function test_activate_dmcrypt() {
         --mark-init=none \
         /dev/mapper/$uuid || return 1
 
-    test_pool_read_write $osd_uuid || return 1
+    test_pool_read_write $uuid || return 1
 }
 
 function test_activate_dir() {

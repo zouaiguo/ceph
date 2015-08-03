@@ -43,7 +43,6 @@
  protected:
    ObjectStore *store;
    const coll_t coll;
-   const coll_t temp_coll;
  public:	
    /**
     * Provides interfaces for PGBackend callbacks
@@ -56,9 +55,6 @@
    public:
      /// Recovery
 
-     virtual void on_local_recover_start(
-       const hobject_t &oid,
-       ObjectStore::Transaction *t) = 0;
      /**
       * Called with the transaction recovering oid
       */
@@ -211,6 +207,8 @@
      virtual uint64_t min_peer_features() const = 0;
 
      virtual bool transaction_use_tbl() = 0;
+     virtual hobject_t get_temp_recovery_object(eversion_t version,
+						snapid_t snap) = 0;
 
      virtual void send_message_osd_cluster(
        int peer, Message *m, epoch_t from_epoch) = 0;
@@ -231,11 +229,10 @@
    };
    Listener *parent;
    Listener *get_parent() const { return parent; }
-   PGBackend(Listener *l, ObjectStore *store, coll_t coll, coll_t temp_coll) :
+   PGBackend(Listener *l, ObjectStore *store, coll_t coll) :
      store(store),
      coll(coll),
-     temp_coll(temp_coll),
-     parent(l), temp_created(false) {}
+     parent(l) {}
    bool is_primary() const { return get_parent()->pgb_is_primary(); }
    OSDMapRef get_osdmap() const { return get_parent()->pgb_get_osdmap(); }
    const pg_info_t &get_info() { return get_parent()->get_info(); }
@@ -322,58 +319,14 @@
 
    virtual void on_flushed() = 0;
 
-   class IsRecoverablePredicate {
-   public:
-     /**
-      * have encodes the shards available
-      */
-     virtual bool operator()(const set<pg_shard_t> &have) const = 0;
-     virtual ~IsRecoverablePredicate() {}
-   };
-   virtual IsRecoverablePredicate *get_is_recoverable_predicate() = 0;
-
-   class IsReadablePredicate {
-   public:
-     /**
-      * have encodes the shards available
-      */
-     virtual bool operator()(const set<pg_shard_t> &have) const = 0;
-     virtual ~IsReadablePredicate() {}
-   };
-   virtual IsReadablePredicate *get_is_readable_predicate() = 0;
-
-   void temp_colls(list<coll_t> *out) {
-     if (temp_created)
-       out->push_back(temp_coll);
-   }
-   void split_colls(
-     spg_t child,
-     int split_bits,
-     int seed,
-     ObjectStore::Transaction *t) {
-     coll_t target = coll_t::make_temp_coll(child);
-     if (!temp_created)
-       return;
-     t->create_collection(target);
-     t->split_collection(
-       temp_coll,
-       split_bits,
-       seed,
-       target);
-   }
+   virtual IsPGRecoverablePredicate *get_is_recoverable_predicate() = 0;
+   virtual IsPGReadablePredicate *get_is_readable_predicate() = 0;
 
    virtual void dump_recovery_info(Formatter *f) const = 0;
 
  private:
-   bool temp_created;
    set<hobject_t> temp_contents;
  public:
-   coll_t get_temp_coll(ObjectStore::Transaction *t);
-   coll_t get_temp_coll() const {
-    return temp_coll;
-   }
-   bool have_temp_coll() const { return temp_created; }
-
    // Track contents of temp collection, clear on reset
    void add_temp_obj(const hobject_t &oid) {
      temp_contents.insert(oid);
@@ -632,7 +585,6 @@
      const OSDMapRef curmap,
      Listener *l,
      coll_t coll,
-     coll_t temp_coll,
      ObjectStore *store,
      CephContext *cct);
  };

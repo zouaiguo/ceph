@@ -214,6 +214,7 @@ protected:
       perfcounter->inc(l_rgw_qlen, -1);
       return req;
     }
+    using ThreadPool::WorkQueue<RGWRequest>::_process;
     void _process(RGWRequest *req) {
       perfcounter->inc(l_rgw_qactive);
       process->handle_request(req);
@@ -555,6 +556,8 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
   s->obj_ctx = &rados_ctx;
 
   s->req_id = store->unique_id(req->id);
+
+  s->gen_trans_id();
 
   req->log(s, "initializing");
 
@@ -1257,8 +1260,6 @@ int main(int argc, const char **argv)
 
   dout(1) << "final shutdown" << dendl;
   g_ceph_context->put();
-
-  ceph::crypto::shutdown();
 
   signal_fd_finalize();
 

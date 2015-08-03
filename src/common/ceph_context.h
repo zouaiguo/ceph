@@ -15,7 +15,7 @@
 #ifndef CEPH_CEPHCONTEXT_H
 #define CEPH_CEPHCONTEXT_H
 
-#include <iostream>
+#include <iosfwd>
 #include <stdint.h>
 #include <string>
 #include <set>
@@ -170,6 +170,8 @@ private:
   CephContextObs *_cct_obs;
   ceph_spinlock_t _feature_lock;
   std::set<std::string> _experimental_features;
+
+  md_config_obs_t *_lockdep_obs;
 
   friend class CephContextObs;
 };

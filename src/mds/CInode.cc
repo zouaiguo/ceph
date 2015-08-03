@@ -443,20 +443,11 @@ void CInode::pop_projected_snaprealm(sr_t *next_snaprealm)
   } else if (next_snaprealm->past_parents.size() !=
 	     snaprealm->srnode.past_parents.size()) {
     invalidate_cached_snaps = true;
+    // re-open past parents
+    snaprealm->_close_parents();
 
-    // update parent pointer
-    assert(snaprealm->open);
-    assert(snaprealm->parent);   // had a parent before
-    SnapRealm *new_parent = get_parent_inode()->find_snaprealm();
-    assert(new_parent);
-    CInode *parenti = new_parent->inode;
-    assert(parenti);
-    assert(parenti->snaprealm);
-    snaprealm->parent = new_parent;
-    snaprealm->add_open_past_parent(new_parent);
     dout(10) << " realm " << *snaprealm << " past_parents " << snaprealm->srnode.past_parents
 	     << " -> " << next_snaprealm->past_parents << dendl;
-    dout(10) << " pinning new parent " << *parenti << dendl;
   }
   snaprealm->srnode = *next_snaprealm;
   delete next_snaprealm;
@@ -477,7 +468,7 @@ void CInode::pop_projected_snaprealm(sr_t *next_snaprealm)
 
 // dirfrags
 
-__u32 CInode::hash_dentry_name(const string &dn)
+__u32 InodeStoreBase::hash_dentry_name(const string &dn)
 {
   int which = inode.dir_layout.dl_dir_hash;
   if (!which)
@@ -485,7 +476,7 @@ __u32 CInode::hash_dentry_name(const string &dn)
   return ceph_str_hash(which, dn.data(), dn.length());
 }
 
-frag_t CInode::pick_dirfrag(const string& dn)
+frag_t InodeStoreBase::pick_dirfrag(const string& dn)
 {
   if (dirfragtree.empty())
     return frag_t();          // avoid the string hash if we can.
@@ -1066,24 +1057,27 @@ void CInode::_fetched(bufferlist& bl, bufferlist& bl2, Context *fin)
     fin->complete(-ENOENT);
     return;
   }
-  string magic;
-  ::decode(magic, p);
-  dout(10) << " magic is '" << magic << "' (expecting '" << CEPH_FS_ONDISK_MAGIC << "')" << dendl;
-  if (magic != CEPH_FS_ONDISK_MAGIC) {
-    dout(0) << "on disk magic '" << magic << "' != my magic '" << CEPH_FS_ONDISK_MAGIC
-	    << "'" << dendl;
-    fin->complete(-EINVAL);
-  } else {
-    try {
-      decode_store(p);
-    } catch (buffer::error &err) {
-      derr << "Corrupt inode 0x" << std::hex << ino() << std::dec
-        << ": " << err << dendl;
+
+  // Attempt decode
+  try {
+    string magic;
+    ::decode(magic, p);
+    dout(10) << " magic is '" << magic << "' (expecting '"
+             << CEPH_FS_ONDISK_MAGIC << "')" << dendl;
+    if (magic != CEPH_FS_ONDISK_MAGIC) {
+      dout(0) << "on disk magic '" << magic << "' != my magic '" << CEPH_FS_ONDISK_MAGIC
+              << "'" << dendl;
       fin->complete(-EINVAL);
-      return;
+    } else {
+      decode_store(p);
+      dout(10) << "_fetched " << *this << dendl;
+      fin->complete(0);
     }
-    dout(10) << "_fetched " << *this << dendl;
-    fin->complete(0);
+  } catch (buffer::error &err) {
+    derr << "Corrupt inode 0x" << std::hex << ino() << std::dec
+      << ": " << err << dendl;
+    fin->complete(-EINVAL);
+    return;
   }
 }
 
@@ -1130,20 +1124,25 @@ void CInode::store_backtrace(MDSInternalContextBase *fin, int op_prio)
   auth_pin(this);
 
   int64_t pool;
-  if (is_dir())
+  if (is_dir()) {
     pool = mdcache->mds->mdsmap->get_metadata_pool();
-  else
+  } else {
     pool = inode.layout.fl_pg_pool;
+  }
 
   inode_backtrace_t bt;
   build_backtrace(pool, bt);
-  bufferlist bl;
-  ::encode(bt, bl);
+  bufferlist parent_bl;
+  ::encode(bt, parent_bl);
 
   ObjectOperation op;
   op.priority = op_prio;
   op.create(false);
-  op.setxattr("parent", bl);
+  op.setxattr("parent", parent_bl);
+
+  bufferlist layout_bl;
+  ::encode(inode.layout, layout_bl);
+  op.setxattr("layout", layout_bl);
 
   SnapContext snapc;
   object_t oid = get_object_name(ino(), frag_t(), "");
@@ -1153,6 +1152,7 @@ void CInode::store_backtrace(MDSInternalContextBase *fin, int op_prio)
     &mdcache->mds->finisher);
 
   if (!state_test(STATE_DIRTYPOOL) || inode.old_pools.empty()) {
+    dout(20) << __func__ << ": no dirtypool or no old pools" << dendl;
     mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
 				   0, NULL, fin2);
     return;
@@ -1162,16 +1162,21 @@ void CInode::store_backtrace(MDSInternalContextBase *fin, int op_prio)
   mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
 				 0, NULL, gather.new_sub());
 
+  // In the case where DIRTYPOOL is set, we update all old pools backtraces
+  // such that anyone reading them will see the new pool ID in
+  // inode_backtrace_t::pool and go read everything else from there.
   for (compact_set<int64_t>::iterator p = inode.old_pools.begin();
        p != inode.old_pools.end();
        ++p) {
     if (*p == pool)
       continue;
 
+    dout(20) << __func__ << ": updating old pool " << *p << dendl;
+
     ObjectOperation op;
     op.priority = op_prio;
     op.create(false);
-    op.setxattr("parent", bl);
+    op.setxattr("parent", parent_bl);
 
     object_locator_t oloc(*p);
     mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
@@ -1279,11 +1284,12 @@ void InodeStoreBase::encode_bare(bufferlist &bl, const bufferlist *snap_blob) co
     ::encode(bufferlist(), bl);
   ::encode(old_inodes, bl);
   ::encode(oldest_snap, bl);
+  ::encode(damage_flags, bl);
 }
 
 void InodeStoreBase::encode(bufferlist &bl, const bufferlist *snap_blob) const
 {
-  ENCODE_START(5, 4, bl);
+  ENCODE_START(6, 4, bl);
   encode_bare(bl, snap_blob);
   ENCODE_FINISH(bl);
 }
@@ -1314,8 +1320,18 @@ void InodeStoreBase::decode_bare(bufferlist::iterator &bl,
       ::decode(inode.layout, bl); // but we only care about the layout portion
     }
   }
-  if (struct_v >= 5 && !bl.end())
-    ::decode(oldest_snap, bl);
+
+  if (struct_v >= 5) {
+    // InodeStore is embedded in dentries without proper versioning, so
+    // we consume up to the end of the buffer
+    if (!bl.end()) {
+      ::decode(oldest_snap, bl);
+    }
+
+    if (!bl.end()) {
+      ::decode(damage_flags, bl);
+    }
+  }
 }
 
 
@@ -2570,12 +2586,14 @@ void CInode::encode_snap(bufferlist& bl)
   bufferlist snapbl;
   encode_snap_blob(snapbl);
   ::encode(snapbl, bl);
+  ::encode(oldest_snap, bl);
 }    
 
 void CInode::decode_snap(bufferlist::iterator& p)
 {
   bufferlist snapbl;
   ::decode(snapbl, p);
+  ::decode(oldest_snap, p);
   decode_snap_blob(snapbl);
 }
 
@@ -3195,7 +3213,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
       e.cap.wanted = cap->wanted();
       e.cap.cap_id = cap->get_cap_id();
       e.cap.seq = cap->get_last_seq();
-      dout(10) << "encode_inodestat issueing " << ccap_string(issue) << " seq " << cap->get_last_seq() << dendl;
+      dout(10) << "encode_inodestat issuing " << ccap_string(issue) << " seq " << cap->get_last_seq() << dendl;
       e.cap.mseq = cap->get_mseq();
       e.cap.realm = realm->inode->ino();
     } else {
@@ -3333,6 +3351,7 @@ void CInode::_encode_base(bufferlist& bl)
   ::encode(dirfragtree, bl);
   ::encode(xattrs, bl);
   ::encode(old_inodes, bl);
+  ::encode(damage_flags, bl);
   encode_snap(bl);
 }
 void CInode::_decode_base(bufferlist::iterator& p)
@@ -3343,6 +3362,7 @@ void CInode::_decode_base(bufferlist::iterator& p)
   ::decode(dirfragtree, p);
   ::decode(xattrs, p);
   ::decode(old_inodes, p);
+  ::decode(damage_flags, p);
   decode_snap(p);
 }
 

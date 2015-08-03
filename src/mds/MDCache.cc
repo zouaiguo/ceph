@@ -168,6 +168,9 @@ public:
 
 MDCache::MDCache(MDS *m) :
   logger(0),
+  filer(m->objecter, &m->finisher),
+  rejoin_done(NULL),
+  resolve_done(NULL),
   recovery_queue(m),
   stray_manager(m)
 {
@@ -222,7 +225,9 @@ MDCache::~MDCache()
     delete logger;
     logger = 0;
   }
-  //delete renamer;
+
+  delete rejoin_done; rejoin_done = NULL;
+  delete resolve_done; resolve_done = NULL;
 }
 
 
@@ -394,6 +399,8 @@ CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
 CInode *MDCache::create_root_inode()
 {
   CInode *i = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);
+  i->inode.uid = g_conf->mds_root_ino_uid;
+  i->inode.gid = g_conf->mds_root_ino_gid;
   i->inode.layout = default_file_layout;
   i->inode.layout.fl_pg_pool = mds->mdsmap->get_first_data_pool();
   return i;
@@ -685,11 +692,16 @@ void MDCache::populate_mydir()
     for (list<frag_t>::iterator p = ls.begin(); p != ls.end(); ++p) {
       frag_t fg = *p;
       CDir *dir = strays[i]->get_dirfrag(fg);
-      if (!dir)
+      if (!dir) {
 	dir = strays[i]->get_or_open_dirfrag(this, fg);
-      if (dir->get_version() == 0) {
-	dir->fetch(new C_MDS_RetryOpenRoot(this));
-	return;
+      }
+
+      if (dir->state_test(CDir::STATE_BADFRAG)) {
+        mds->damaged();
+        assert(0);
+      } else if (dir->get_version() == 0) {
+        dir->fetch(new C_MDS_RetryOpenRoot(this));
+        return;
       }
     }
   }
@@ -2639,9 +2651,11 @@ ESubtreeMap *MDCache::create_subtree_map()
 }
 
 
-void MDCache::resolve_start()
+void MDCache::resolve_start(MDSInternalContext *resolve_done_)
 {
   dout(10) << "resolve_start" << dendl;
+  assert(resolve_done == NULL);
+  resolve_done = resolve_done_;
 
   if (mds->mdsmap->get_root() != mds->whoami) {
     // if we don't have the root dir, adjust it to UNKNOWN.  during
@@ -3261,7 +3275,9 @@ void MDCache::maybe_resolve_finish()
   if (mds->is_resolve()) {
     trim_unlinked_inodes();
     recalc_auth_bits(false);
-    mds->resolve_done();
+    assert(resolve_done != NULL);
+    resolve_done->complete(0);
+    resolve_done = NULL;
   } else {
     maybe_send_pending_rejoins();
   }
@@ -3831,9 +3847,11 @@ void MDCache::recalc_auth_bits(bool replay)
  *   after recovery.
  */
 
-void MDCache::rejoin_start()
+void MDCache::rejoin_start(MDSInternalContext *rejoin_done_)
 {
   dout(10) << "rejoin_start" << dendl;
+  assert(rejoin_done == NULL);
+  rejoin_done = rejoin_done_;
 
   rejoin_gather = recovery_set;
   // need finish opening cap inodes before sending cache rejoins
@@ -5651,7 +5669,9 @@ void MDCache::open_snap_parents()
     do_delayed_cap_imports();
 
     start_files_to_recover(rejoin_recover_q, rejoin_check_q);
-    mds->rejoin_done();
+    assert(rejoin_done != NULL);
+    rejoin_done->complete(0);
+    rejoin_done = NULL;
   }
 }
 
@@ -6081,10 +6101,10 @@ void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
     assert(in->last == CEPH_NOSNAP);
   }
   dout(10) << "_truncate_inode  snapc " << snapc << " on " << *in << dendl;
-  mds->filer->truncate(in->inode.ino, &in->inode.layout, *snapc,
-		       pi->truncate_size, pi->truncate_from-pi->truncate_size,
-		       pi->truncate_seq, utime_t(), 0,
-		       0, new C_OnFinisher(new C_IO_MDC_TruncateFinish(this, in,
+  filer.truncate(in->inode.ino, &in->inode.layout, *snapc,
+		 pi->truncate_size, pi->truncate_from-pi->truncate_size,
+		 pi->truncate_seq, utime_t(), 0,
+		 0, new C_OnFinisher(new C_IO_MDC_TruncateFinish(this, in,
 								       ls),
 					   &mds->finisher));
 }
@@ -7174,7 +7194,6 @@ void MDCache::check_memory_usage()
 	   << ", malloc " << last.malloc << " mmap " << last.mmap
 	   << ", baseline " << baseline.get_heap()
 	   << ", buffers " << (buffer::get_total_alloc() >> 10)
-	   << ", max " << g_conf->mds_mem_max
 	   << ", " << num_inodes_with_caps << " / " << inode_map.size() << " inodes have caps"
 	   << ", " << num_caps << " caps, " << caps_per_inode << " caps per inode"
 	   << dendl;
@@ -7183,13 +7202,6 @@ void MDCache::check_memory_usage()
   mds->mlogger->set(l_mdm_heap, last.get_heap());
   mds->mlogger->set(l_mdm_malloc, last.malloc);
 
-  /*int size = last.get_total();
-  if (size > g_conf->mds_mem_max * .9) {
-    float ratio = (float)g_conf->mds_mem_max * .9 / (float)size;
-    if (ratio < 1.0)
-      mds->server->recall_client_state(ratio);
-  } else 
-    */
   if (num_inodes_with_caps > g_conf->mds_cache_size) {
     float ratio = (float)g_conf->mds_cache_size * .9 / (float)num_inodes_with_caps;
     if (ratio < 1.0)
@@ -7630,6 +7642,12 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, MDSInternalContextBa
   if (cur->state_test(CInode::STATE_PURGING))
     return -ESTALE;
 
+  // make sure snaprealm are open...
+  if (mdr && cur->snaprealm && !cur->snaprealm->is_open() &&
+      !cur->snaprealm->open_parents(_get_waiter(mdr, req, fin))) {
+    return 1;
+  }
+
   // start trace
   if (pdnvec)
     pdnvec->clear();
@@ -7710,13 +7728,6 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, MDSInternalContextBa
     }
     */
 
-    // make sure snaprealm parents are open...
-    if (cur->snaprealm && !cur->snaprealm->open && mdr &&
-	!cur->snaprealm->open_parents(_get_waiter(mdr, req, fin))) {
-      return 1;
-    }
-
-
     // dentry
     CDentry *dn = curdir->lookup(path[depth], snapid);
     CDentry::linkage_t *dnl = dn ? dn->get_projected_linkage() : 0;
@@ -7783,8 +7794,14 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, MDSInternalContextBa
         }        
       }
 
-      // add to trace, continue.
       cur = in;
+      // make sure snaprealm are open...
+      if (mdr && cur->snaprealm && !cur->snaprealm->is_open() &&
+	  !cur->snaprealm->open_parents(_get_waiter(mdr, req, fin))) {
+	return 1;
+      }
+
+      // add to trace, continue.
       touch_inode(cur);
       if (pdnvec)
 	pdnvec->push_back(dn);
@@ -9016,6 +9033,7 @@ void MDCache::do_realm_invalidate_and_update_notify(CInode *in, int snapop, bool
   bufferlist snapbl;
   in->snaprealm->build_snap_trace(snapbl);
 
+  set<SnapRealm*> past_children;
   map<client_t, MClientSnap*> updates;
   list<SnapRealm*> q;
   q.push_back(in->snaprealm);
@@ -9040,6 +9058,13 @@ void MDCache::do_realm_invalidate_and_update_notify(CInode *in, int snapop, bool
       }
     }
 
+    if (snapop == CEPH_SNAP_OP_UPDATE || snapop == CEPH_SNAP_OP_DESTROY) {
+      for (set<SnapRealm*>::iterator p = realm->open_past_children.begin();
+	   p != realm->open_past_children.end();
+	   ++p)
+	past_children.insert(*p);
+    }
+
     // notify for active children, too.
     dout(10) << " " << realm << " open_children are " << realm->open_children << dendl;
     for (set<SnapRealm*>::iterator p = realm->open_children.begin();
@@ -9050,6 +9075,43 @@ void MDCache::do_realm_invalidate_and_update_notify(CInode *in, int snapop, bool
 
   if (!nosend)
     send_snaps(updates);
+
+  // notify past children and their descendants if we update/delete old snapshots
+  for (set<SnapRealm*>::iterator p = past_children.begin();
+       p !=  past_children.end();
+       ++p)
+    q.push_back(*p);
+
+  while (!q.empty()) {
+    SnapRealm *realm = q.front();
+    q.pop_front();
+
+    realm->invalidate_cached_snaps();
+
+    for (set<SnapRealm*>::iterator p = realm->open_children.begin();
+	 p != realm->open_children.end();
+	 ++p) {
+      if (past_children.count(*p) == 0)
+	q.push_back(*p);
+    }
+
+    for (set<SnapRealm*>::iterator p = realm->open_past_children.begin();
+	 p != realm->open_past_children.end();
+	 ++p) {
+      if (past_children.count(*p) == 0) {
+	q.push_back(*p);
+	past_children.insert(*p);
+      }
+    }
+  }
+
+  if (snapop == CEPH_SNAP_OP_DESTROY) {
+    // eval stray inodes if we delete snapshot from their past ancestor snaprealm
+    for (set<SnapRealm*>::iterator p = past_children.begin();
+	p != past_children.end();
+	++p)
+      maybe_eval_stray((*p)->inode, true);
+  }
 }
 
 void MDCache::_snaprealm_create_finish(MDRequestRef& mdr, MutationRef& mut, CInode *in)
@@ -9071,9 +9133,10 @@ void MDCache::_snaprealm_create_finish(MDRequestRef& mdr, MutationRef& mut, CIno
   ::decode(seq, p);
 
   in->open_snaprealm();
-  in->snaprealm->open = true;
   in->snaprealm->srnode.seq = seq;
   in->snaprealm->srnode.created = seq;
+  bool ok = in->snaprealm->_open_parents(NULL);
+  assert(ok);
 
   do_realm_invalidate_and_update_notify(in, CEPH_SNAP_OP_SPLIT);
 
