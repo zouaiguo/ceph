@@ -3,8 +3,12 @@ Plain create with various options specified via usual cli arguments
   $ rbd create -s 1 test
   $ rbd info test --format json | python -mjson.tool | sed 's/,$/, /'
   {
-      "block_name_prefix": "rb.0.*",  (glob)
-      "format": 1, 
+      "block_name_prefix": "rbd_data.*",  (glob)
+      "features": [
+          "layering"
+      ], 
+      "flags": [], 
+      "format": 2, 
       "name": "test", 
       "object_size": 4194304, 
       "objects": 1, 
@@ -15,8 +19,12 @@ Plain create with various options specified via usual cli arguments
   $ rbd create -s 1 --order 20 test
   $ rbd info test --format json | python -mjson.tool | sed 's/,$/, /'
   {
-      "block_name_prefix": "rb.0.*",  (glob)
-      "format": 1, 
+      "block_name_prefix": "rbd_data.*",  (glob)
+      "features": [
+          "layering"
+      ], 
+      "flags": [], 
+      "format": 2, 
       "name": "test", 
       "object_size": 1048576, 
       "objects": 1, 
@@ -29,10 +37,9 @@ Plain create with various options specified via usual cli arguments
   {
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
-          "layering", 
-          "striping", 
-          "exclusive"
+          "layering"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 4194304, 
@@ -46,10 +53,9 @@ Plain create with various options specified via usual cli arguments
   {
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
-          "layering", 
-          "striping", 
-          "exclusive"
+          "layering"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 4194304, 
@@ -63,10 +69,9 @@ Plain create with various options specified via usual cli arguments
   {
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
-          "layering", 
-          "striping", 
-          "exclusive"
+          "layering"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 1048576, 
@@ -81,9 +86,9 @@ Plain create with various options specified via usual cli arguments
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
           "layering", 
-          "striping", 
-          "exclusive"
+          "striping"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 4194304, 
@@ -103,9 +108,9 @@ Format 2 Usual arguments with custom rbd_default_* params
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
           "layering", 
-          "striping", 
-          "exclusive"
+          "striping"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 2097152, 
@@ -122,9 +127,9 @@ Format 2 Usual arguments with custom rbd_default_* params
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
           "layering", 
-          "striping", 
-          "exclusive"
+          "striping"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 8388608, 
@@ -141,9 +146,9 @@ Format 2 Usual arguments with custom rbd_default_* params
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
           "layering", 
-          "striping", 
-          "exclusive"
+          "striping"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 4194304, 
@@ -157,10 +162,10 @@ Format 2 Usual arguments with custom rbd_default_* params
 
 Format 1 Usual arguments with custom rbd_default_* params
 =========================================================
-  $ rbd create -s 1 test --rbd-default-order 20
+  $ rbd create -s 1 test --rbd-default-order 20 --rbd-default-format 1
   $ rbd info test --format json | python -mjson.tool | sed 's/,$/, /'
   {
-      "block_name_prefix": "rb.0.*",  (glob)
+      "block_name_prefix": "rb.*",  (glob)
       "format": 1, 
       "name": "test", 
       "object_size": 1048576, 
@@ -174,10 +179,9 @@ Format 1 Usual arguments with custom rbd_default_* params
   {
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
-          "layering", 
-          "striping", 
-          "exclusive"
+          "layering"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 4194304, 
@@ -191,10 +195,9 @@ Format 1 Usual arguments with custom rbd_default_* params
   {
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
-          "layering", 
-          "striping", 
-          "exclusive"
+          "layering"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 1048576, 
@@ -208,10 +211,9 @@ Format 1 Usual arguments with custom rbd_default_* params
   {
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
-          "layering", 
-          "striping", 
-          "exclusive"
+          "layering"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 1048576, 
@@ -226,9 +228,9 @@ Format 1 Usual arguments with custom rbd_default_* params
       "block_name_prefix": "rbd_data.*",  (glob)
       "features": [
           "layering", 
-          "striping", 
-          "exclusive"
+          "striping"
       ], 
+      "flags": [], 
       "format": 2, 
       "name": "test", 
       "object_size": 4194304, 
@@ -239,3 +241,4 @@ Format 1 Usual arguments with custom rbd_default_* params
       "stripe_unit": 1048576
   }
   $ rbd rm test --no-progress
+  $ export CEPH_ARGS=$ORIG_CEPH_ARGS
