@@ -2946,8 +2946,8 @@ static bool set_conf_param(const char *param, const char **var1,
 
 bool size_set;
 
-int rados_init(librados::Rados &rados, vector<const char*> &args,
-               const std::string &keyfile, int rbd_default_format) {
+int rados_init(librados::Rados &rados, int argc, const char** argv,
+	       vector<const char*> &args) {
   std::string cluster_name = "ceph";
   std::string conf_file_list;
   CephInitParameters init_params = ceph_argparse_early_args(
@@ -2970,16 +2970,9 @@ int rados_init(librados::Rados &rados, vector<const char*> &args,
     return EXIT_FAILURE;
   }
 
-  r = rados.conf_set("keyfile", keyfile.c_str());
+  r = rados.conf_parse_argv(argc, argv);
   if (r < 0) {
-    std::cerr << "rbd: failed to update keyfile" << std::endl;
-    return EXIT_FAILURE;
-  }
-
-  r = rados.conf_set("rbd_default_format",
-                     stringify(rbd_default_format).c_str());
-  if (r < 0) {
-    std::cerr << "rbd: failed to update default image format" << std::endl;
+    std::cerr << "rbd: failed to parse arguments" << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -2988,6 +2981,7 @@ int rados_init(librados::Rados &rados, vector<const char*> &args,
     std::cerr << "rbd: failed to update writethrough policy" << std::endl;
     return EXIT_FAILURE;
   }
+
   return 0;
 }
 
@@ -3538,7 +3532,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
 			  opt_cmd != OPT_SHOWMAPPED &&
                           opt_cmd != OPT_MERGE_DIFF);
   if (talk_to_cluster &&
-      rados_init(rados, args, keyfile, format) < 0) {
+      rados_init(rados, argc, argv, args) < 0) {
     cerr << "rbd: couldn't initialize rados!" << std::endl;
     return EXIT_FAILURE;
   }
