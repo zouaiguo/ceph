@@ -30,6 +30,7 @@ using namespace std;
 
 #include "ObjectStore.h"
 #include "JournalingObjectStore.h"
+#include "os/fs/FS.h"
 
 #include "common/Timer.h"
 #include "common/WorkQueue.h"
@@ -130,6 +131,7 @@ private:
   int fsid_fd, op_fd, basedir_fd, current_fd;
 
   FileStoreBackend *backend;
+  FS *fs;
 
   void create_backend(long f_type);
 

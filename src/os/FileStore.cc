@@ -747,6 +747,9 @@ void FileStore::create_backend(long f_type)
   }
 
   set_xattr_limits_via_conf();
+
+  fs = FS::create(f_type);
+  assert(fs);
 }
 
 int FileStore::mkfs()
@@ -910,6 +913,8 @@ int FileStore::mkfs()
   VOID_TEMP_FAILURE_RETRY(::close(basedir_fd));
   delete backend;
   backend = NULL;
+  delete fs;
+  fs = NULL;
   return ret;
 }
 
@@ -1732,6 +1737,8 @@ int FileStore::umount()
 
   delete backend;
   backend = NULL;
+  delete fs;
+  fs = NULL;
 
   object_map.reset();
 
