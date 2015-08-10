@@ -288,6 +288,7 @@ int FileStore::lfn_open(coll_t cid,
     goto fail;
   }
   fd = r;
+
   if (create && (!exist)) {
     r = (*index)->created(oid, (*path)->path());
     if (r < 0) {
@@ -303,6 +304,42 @@ int FileStore::lfn_open(coll_t cid,
       derr << "error setting spillout xattr for oid " << oid << " (" << (*path)->path()
                      << "):" << cpp_strerror(-r) << dendl;
       goto fail;
+    }
+
+    // store handle and reopen?
+    string h;
+    r = fs->get_handle(fd, &h);
+    if (r >= 0) {
+      r = ceph_os_fsetxattr(fd, "user.cephos.xfsh", h.data(), h.length());
+      if (r >= 0) {
+	int newfd = fs->open_handle(fd, h, flags);
+	if (newfd >= 0) {
+	  TEMP_FAILURE_RETRY(::close(fd));
+	  fd = newfd;
+	} else {
+	  derr << "failed to open handle: " << cpp_strerror(r) << dendl;
+	}
+      } else {
+	derr << "failed to set handle xattr: " << cpp_strerror(r) << dendl;
+      }
+    } else {
+      derr << "failed to get handle: " << cpp_strerror(r) << dendl;
+    }
+  } else {
+    // reopen by handle?
+    char handle[80];
+    r = ceph_os_fgetxattr(fd, "user.cephos.xfsh", handle, sizeof(handle));
+    if (r > 0) {
+      string h(handle, r);
+      int newfd = fs->open_handle(fd, h, flags);
+      if (newfd >= 0) {
+	TEMP_FAILURE_RETRY(::close(fd));
+	fd = newfd;
+      } else {
+	derr << "failed to open handle: " << cpp_strerror(r) << dendl;
+      }
+    } else {
+      derr << "failed to read handle xattr: " << cpp_strerror(r) << dendl;
     }
   }
 
