@@ -2954,7 +2954,7 @@ int rados_init(librados::Rados &rados, int argc, const char** argv,
     args, CEPH_ENTITY_TYPE_CLIENT, 0, &cluster_name, &conf_file_list);
 
   int r = rados.init2(init_params.name.to_cstr(), cluster_name.c_str(),
-                      0);
+                      LIBRADOS_INIT_UTILITY);
   if (r < 0) {
     std::cerr << "rbd: couldn't initialize rados!" << std::endl;
     return EXIT_FAILURE;

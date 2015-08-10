@@ -2171,11 +2171,15 @@ librados::ObjectOperation::~ObjectOperation()
 static
 int rados_create_common(rados_t *pcluster,
 			const char * const clustername,
-			CephInitParameters *iparams)
+			CephInitParameters *iparams,
+			uint64_t init_env)
 {
   // missing things compared to global_init:
   // g_ceph_context, g_conf, g_lockdep, signal handlers
-  CephContext *cct = common_preinit(*iparams, CODE_ENVIRONMENT_LIBRARY, 0);
+  enum code_environment_t code_env = CODE_ENVIRONMENT_LIBRARY;
+  if (init_env & LIBRADOS_INIT_UTILITY)
+    code_env = CODE_ENVIRONMENT_UTILITY;
+  CephContext *cct = common_preinit(*iparams, code_env, 0);
   if (clustername)
     cct->_conf->cluster = clustername;
   cct->_conf->parse_env(); // environment variables override
@@ -2195,7 +2199,7 @@ extern "C" int rados_create(rados_t *pcluster, const char * const id)
   if (id) {
     iparams.name.set(CEPH_ENTITY_TYPE_CLIENT, id);
   }
-  int retval = rados_create_common(pcluster, "ceph", &iparams);
+  int retval = rados_create_common(pcluster, "ceph", &iparams, 0);
   tracepoint(librados, rados_create_exit, retval, *pcluster);
   return retval;
 }
@@ -2217,7 +2221,7 @@ extern "C" int rados_create2(rados_t *pcluster, const char *const clustername,
     return -EINVAL;
   }
 
-  int retval = rados_create_common(pcluster, clustername, &iparams);
+  int retval = rados_create_common(pcluster, clustername, &iparams, flags);
   tracepoint(librados, rados_create2_exit, retval, *pcluster);
   return retval;
 }

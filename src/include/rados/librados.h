@@ -123,6 +123,19 @@ enum {
 };
 /** @} */
 
+/**
+ * @name rados_create flags
+ * Flags for initialization of librados via rados_create2().
+ * These change the defaults for some logging-related settings.
+ * For more details see src/common/common_init.cc.
+ * @{
+ */
+enum {
+  LIBRADOS_INIT_LIBRARY = 0, /// default, disables stderr output
+  LIBRADOS_INIT_UTILITY = 1, /// err and log to stderr enabled
+};
+/** @} */
+
 /*
  * snap id contants
  */
@@ -332,7 +345,7 @@ CEPH_RADOS_API int rados_create(rados_t *cluster, const char * const id);
  * Like rados_create, but 
  * 1) don't assume 'client\.'+id; allow full specification of name
  * 2) allow specification of cluster name
- * 3) flags for future expansion
+ * 3) flags for changing default settings based on how librados is used
  */
 CEPH_RADOS_API int rados_create2(rados_t *pcluster,
                                  const char *const clustername,
