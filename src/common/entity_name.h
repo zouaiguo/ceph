@@ -67,7 +67,6 @@ struct EntityName
   bool has_default_id() const;
 
   static std::string get_valid_types_as_str();
-
   friend bool operator<(const EntityName& a, const EntityName& b);
   friend std::ostream& operator<<(std::ostream& out, const EntityName& n);
   friend bool operator==(const EntityName& a, const EntityName& b);

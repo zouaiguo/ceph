@@ -260,6 +260,7 @@ protected:
   friend class Messenger;
 
   //dmclock specific
+  uint64_t dmclock_delta, dmclock_rho;
   __s8 service_tag;
 
 public:
@@ -281,6 +282,8 @@ public:
       byte_throttler(NULL),
       msg_throttler(NULL),
       dispatch_throttle_size(0),
+      dmclock_delta(1),
+      dmclock_rho(1),
       service_tag(-1){
     memset(&header, 0, sizeof(header));
     header.type = t;
@@ -464,8 +467,10 @@ public:
   void encode(uint64_t features, int crcflags);
 
   //dmclock specific
-  virtual unsigned get_dmClock_param_delta() const{ return 0; }
-  virtual unsigned get_dmClock_param_rho() const { return 0;}
+  virtual uint64_t get_dmClock_param_delta() const{ return dmclock_delta; }
+  virtual uint64_t get_dmClock_param_rho() const { return dmclock_rho;}
+  virtual void set_dmClock_param_delta(uint64_t d) { dmclock_delta = d; }
+  virtual void set_dmClock_param_rho(uint64_t r) { dmclock_rho = r;}
   virtual unsigned get_dmclock_slo_reserve() const { return 0;}
   virtual unsigned get_dmclock_slo_prop() const { return 0;}
   virtual unsigned get_dmclock_slo_limit() const { return 0;}

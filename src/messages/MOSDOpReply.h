@@ -121,13 +121,20 @@ public:
 					       head.client_inc,
 					       head.tid); }
   */
-
+private:
+  // dmclock specific variables
+  __u32 dmclock_slo_reserve;
+  __u32 dmclock_slo_prop;
+  __u32 dmclock_slo_limit;
 public:
   MOSDOpReply()
     : Message(CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION) { }
   MOSDOpReply(MOSDOp *req, int r, epoch_t e, int acktype, bool ignore_out_data)
     : Message(CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION),
-      oid(req->oid), pgid(req->pgid), ops(req->ops) {
+      oid(req->oid), pgid(req->pgid), ops(req->ops),
+      dmclock_slo_reserve(0),
+      dmclock_slo_prop(1),
+      dmclock_slo_limit(0){
 
     set_tid(req->get_tid());
     result = r;
@@ -144,8 +151,20 @@ public:
 	ops[i].outdata.clear();
     }
     //dmclock
+    set_dmclock_slo(req->get_dmclock_slo_reserve(),
+		    req->get_dmclock_slo_prop(),
+		    req->get_dmclock_slo_limit());
     set_dmclock_service_tag(req->get_dmclock_service_tag());
   }
+
+  void set_dmclock_slo(__u32 r, __u32 p, __u32 l ){
+     dmclock_slo_reserve = r;
+     dmclock_slo_prop = p;
+     dmclock_slo_limit = l;
+   }
+   __u32 get_dmclock_slo_reserve() const { return dmclock_slo_reserve;}
+   __u32 get_dmclock_slo_prop() const { return dmclock_slo_prop;}
+   __u32 get_dmclock_slo_limit() const { return dmclock_slo_limit;}
 private:
   ~MOSDOpReply() {}
 
@@ -192,7 +211,14 @@ public:
       ::encode(replay_version, payload);
       ::encode(user_version, payload);
       ::encode(redirect, payload);
-      ::encode(service_tag, payload); //dmclock
+
+      //dmclock
+      ::encode(dmclock_delta, payload);
+      ::encode(dmclock_rho, payload);
+      ::encode(dmclock_slo_reserve, payload);
+      ::encode(dmclock_slo_prop, payload);
+      ::encode(dmclock_slo_limit, payload);
+      ::encode(service_tag, payload);
     }
   }
   virtual void decode_payload() {
@@ -249,7 +275,13 @@ public:
       if (header.version >= 6)
 	::decode(redirect, p);
 
-      ::decode(service_tag, p); //dmclock
+      //dmclock
+      ::decode(dmclock_delta, p);
+      ::decode(dmclock_rho, p);
+      ::decode(dmclock_slo_reserve, p);
+      ::decode(dmclock_slo_prop, p);
+      ::decode(dmclock_slo_limit, p);
+      ::decode(service_tag, p);
     }
   }
 

@@ -4378,9 +4378,17 @@ void OSD::ms_handle_fast_accept(Connection *con)
 bool OSD::ms_handle_reset(Connection *con)
 {
   OSD::Session *session = (OSD::Session *)con->get_priv();
-  dout(1) << "ms_handle_reset con " << con << " session " << session << dendl;
+  dout(0) << "ms_handle_reset con " << con << " session " << session << dendl; // dm_clock
   if (!session)
     return false;
+
+
+  //dm_clock
+  entity_name_t name(session->entity_name.get_type(), session->num);
+  entity_inst_t client_id(name, session->con->get_peer_addr());
+  op_shardedwq.purge_idle_client_in_shards(client_id);
+  lgeneric_subdout(cct, osd, 0) << "dm_clock: client "<< client_id<<" died (id: "<<session->entity_name.get_id() << dendl;
+
   session->wstate.reset();
   session->con.reset(NULL);  // break con <-> session ref cycle
   session_handle_reset(session);
@@ -5512,6 +5520,7 @@ bool OSD::ms_verify_authorizer(Connection *con, int peer_type,
     }
 
     s->entity_name = name;
+    s->num = global_id;
     if (caps_info.allow_all)
       s->caps.set_allow_all();
     s->auid = auid;
@@ -8234,8 +8243,6 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
     sdata->sdata_lock.Unlock();
     sdata->sdata_op_ordering_lock.Lock();
     if(sdata->pqueue.empty()) {
-      if(sdata->pqueue.purge_required_dmClock())
-	sdata->pqueue.purge_dmClock();
       sdata->sdata_op_ordering_lock.Unlock();
       return;
     }
@@ -8244,6 +8251,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
   //  pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue();
   int service_tag = -1;
   pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue_dmClock(service_tag);
+  lgeneric_subdout(osd->cct, osd, 0) << "dequeue service tag " << service_tag << dendl;
 
   sdata->pg_for_processing[&*(item.first)].push_back(item.second);
   sdata->sdata_op_ordering_lock.Unlock();
@@ -8321,6 +8329,8 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
   unsigned reservation = item.second.get_reservation();
   unsigned prop = item.second.get_prop();
   unsigned limit = item.second.get_limit();
+  uint64_t delta = item.second.get_delta();
+  uint64_t rho = item.second.get_rho();
 
   sdata->sdata_op_ordering_lock.Lock();
 
@@ -8328,13 +8338,21 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
     sdata->pqueue.enqueue_strict(
 	item.second.get_owner(), priority, item);
   else{
-    //    sdata->pqueue.enqueue(
-    //      item.second.get_owner(),
-    //      priority, cost, item);
     sdata->pqueue.enqueue_dmClock(
-	item.second.get_owner(),
-	reservation, prop, limit, cost, item);
+      item.second.get_owner(),
+      reservation, prop, limit, delta, rho, cost, item);
     //dmclock debug
+
+    lgeneric_subdout(osd->cct, osd, 0) << "dm_clock enqueue client_id: "<<item.second.get_owner()
+      << " prio "<< priority
+      << " rho " << rho
+      << " delta " << delta
+      << dendl;
+  }
+
+  sdata->sdata_op_ordering_lock.Unlock();
+
+//  {//dm_clock
 //    lgeneric_subdout(osd->cct, osd, 0) << "enqueue status: ";
 //    Formatter *f = Formatter::create("json-pretty"); //"json"
 //    f->open_object_section("q");
@@ -8343,10 +8361,7 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
 //    f->flush(*_dout);
 //    delete f;
 //    *_dout << dendl;
-  }
-
-  sdata->sdata_op_ordering_lock.Unlock();
-
+//  }
   sdata->sdata_lock.Lock();
   sdata->sdata_cond.SignalOne();
   sdata->sdata_lock.Unlock();
@@ -8372,25 +8387,16 @@ void OSD::ShardedOpWQ::_enqueue_front(pair<PGRef, PGQueueable> item) {
   unsigned reservation = item.second.get_reservation();
   unsigned prop = item.second.get_prop();
   unsigned limit = item.second.get_limit();
+  uint64_t delta = item.second.get_delta();
+  uint64_t rho = item.second.get_rho();
 
   if (priority >= CEPH_MSG_PRIO_LOW)
     sdata->pqueue.enqueue_strict_front(item.second.get_owner(), priority,
 	item);
   else{
-    //    sdata->pqueue.enqueue_front(
-    //      item.second.get_owner(),
-    //      priority, cost, item);
-    sdata->pqueue.enqueue_dmClock(item.second.get_owner(), reservation,
-	prop, limit, cost, item);
-//    //dmclock debug
-//    lgeneric_subdout(osd->cct, osd, 0) << "enqueue front status: ";
-//    Formatter *f = Formatter::create("json-pretty"); //"json"
-//    f->open_object_section("q");
-//    dump(f);
-//    f->close_section();
-//    f->flush(*_dout);
-//    delete f;
-//    *_dout << dendl;
+    sdata->pqueue.enqueue_front_dmClock(item.second.get_owner(), reservation,
+	prop, limit, delta, rho, cost, item);
+    lgeneric_subdout(osd->cct, osd, 0) << "dm_clock enqueue_front client_id: "<<item.second.get_owner() <<dendl;
   }
   sdata->sdata_op_ordering_lock.Unlock();
   sdata->sdata_lock.Lock();

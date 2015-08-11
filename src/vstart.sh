@@ -413,7 +413,7 @@ fi
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
 	client slo iops reserve = 0
 	client slo iops prop = 300
-	client slo iops limit = 1000
+	client slo iops limit = 100
 
 [mds]
 $DAEMONOPTS

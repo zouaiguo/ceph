@@ -220,7 +220,8 @@ class DeletingState {
     DELETING_DIR,
     DELETED_DIR,
     CANCELED,
-  } status;bool stop_deleting;
+  } status;
+  bool stop_deleting;
   public:
   const spg_t pgid;
   const PGRef old_pg_state;
@@ -346,6 +347,7 @@ class PGQueueable {
 
   //dmclock specific
   unsigned reservation, prop, limit;
+  uint64_t delta, rho;
   struct RunVis: public boost::static_visitor<> {
     OSD *osd;
     PGRef &pg;
@@ -368,17 +370,19 @@ class PGQueueable {
 	op->get_req()->get_source_inst()),
 	reservation(op->get_req()->get_dmclock_slo_reserve()),
 	prop(op->get_req()->get_dmclock_slo_prop()),
-	limit(op->get_req()->get_dmclock_slo_limit()){
+	limit(op->get_req()->get_dmclock_slo_limit()),
+	delta(op->get_req()->get_dmClock_param_delta()),
+	rho(op->get_req()->get_dmClock_param_rho()){
 	}
   PGQueueable(const PGSnapTrim &op, int cost, unsigned priority,
       utime_t start_time, const entity_inst_t &owner) :
     qvariant(op), cost(cost), priority(priority), start_time(
-	start_time), owner(owner), reservation(0), prop(priority), limit(100) {
+	start_time), owner(owner), reservation(0), prop(priority), limit(100), delta(1), rho(1) {
     }
   PGQueueable(const PGScrub &op, int cost, unsigned priority,
       utime_t start_time, const entity_inst_t &owner) :
     qvariant(op), cost(cost), priority(priority), start_time(
-	start_time), owner(owner), reservation(0), prop(priority), limit(100) {
+	start_time), owner(owner), reservation(0), prop(priority), limit(100), delta(1), rho(1) {
     }
   boost::optional<OpRequestRef> maybe_get_op() {
     OpRequestRef *op = boost::get<OpRequestRef>(&qvariant);
@@ -409,6 +413,21 @@ class PGQueueable {
   }
   unsigned get_limit() const{
     return limit;
+  }
+  uint64_t get_delta() const{
+    return delta;
+  }
+  uint64_t get_rho() const{
+    return rho;
+  }
+  void set_delta_and_rho(uint64_t d, uint64_t r){
+    rho = r;
+    delta = d;
+    OpRequestRef *op = boost::get<OpRequestRef>(&qvariant);
+    if(op){
+	(*op)->get_req()->set_dmClock_param_delta(delta);
+	(*op)->get_req()->set_dmClock_param_rho(rho);
+    }
   }
   void set_service_tag(int service_tag){
     OpRequestRef *op = boost::get<OpRequestRef>(&qvariant);
@@ -844,7 +863,8 @@ class OSDService {
       send_pg_temp();
 
     void
-      queue_for_peering(PG *pg);bool
+      queue_for_peering(PG *pg);
+    bool
       queue_for_recovery(PG *pg);
     void queue_for_snap_trim(PG *pg) {
       op_wq.queue(
@@ -1366,12 +1386,13 @@ class OSD: public Dispatcher, public md_config_obs_t {
       epoch_t last_sent_epoch;
       Mutex received_map_lock;
       epoch_t received_map_epoch; // largest epoch seen in MOSDMap from here
+      int64_t num; // for dm_clock
 
       Session(CephContext *cct) :
 	RefCountedObject(cct), auid(-1), con(0), session_dispatch_lock(
 	    "Session::session_dispatch_lock"), sent_epoch_lock(
 	      "Session::sent_epoch_lock"), last_sent_epoch(0), received_map_lock(
-		"Session::received_map_lock"), received_map_epoch(0) {
+		"Session::received_map_lock"), received_map_epoch(0), num(0) {
 	      }
 
     };
@@ -1690,7 +1711,7 @@ class ShardedOpWQ: public ShardedThreadPool::ShardedWQ<
 			 sdata_lock(lock_name.c_str()), sdata_op_ordering_lock(
 			     ordering_lock.c_str()), pqueue(max_tok_per_prio,
 			     min_cost, osd_max_throughput) {
-			     }
+		       }
 		     };
 
 		     vector<ShardData*> shard_list;
@@ -1755,6 +1776,7 @@ class ShardedOpWQ: public ShardedThreadPool::ShardedWQ<
 			 sdata->sdata_op_ordering_lock.Unlock();
 		       }
 		     }
+
 
 		     struct Pred {
 		       PG *pg;
@@ -1821,6 +1843,16 @@ class ShardedOpWQ: public ShardedThreadPool::ShardedWQ<
 		       assert(NULL != sdata);
 		       Mutex::Locker l(sdata->sdata_op_ordering_lock);
 		       return sdata->pqueue.empty();
+		     }
+
+		     void purge_idle_client_in_shards(entity_inst_t client_id) {
+		       for (uint32_t i = 0; i < num_shards; i++) {
+			 ShardData* sdata = shard_list[i];
+			 assert(NULL != sdata);
+			 sdata->sdata_op_ordering_lock.Lock();
+			 sdata->pqueue.purge_dmClock(client_id);
+			 sdata->sdata_op_ordering_lock.Unlock();
+		       }
 		     }
 		   } op_shardedwq;
 
@@ -2448,9 +2480,11 @@ ms_handle_connect(Connection *con);
 void
 ms_handle_fast_connect(Connection *con);
 void
-ms_handle_fast_accept(Connection *con);bool
+ms_handle_fast_accept(Connection *con);
+bool
 ms_handle_reset(Connection *con);
-void ms_handle_remote_reset(Connection *con) {
+void
+ms_handle_remote_reset(Connection *con) {
 }
 
 public:

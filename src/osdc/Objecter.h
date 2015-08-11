@@ -2600,8 +2600,8 @@ private:
 public:
   void set_epoch_barrier(epoch_t epoch);
 private: //dmclock specific
-  int64_t dmclock_delta;
-  int64_t dmclock_rho;
+  atomic_t dmclock_delta;
+  atomic_t dmclock_rho;
 };
 
 

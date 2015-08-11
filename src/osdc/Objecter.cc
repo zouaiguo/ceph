@@ -137,6 +137,9 @@ enum {
   l_osdc_last,
 };
 
+enum {
+  T_NONE = -1, T_RESERVE = 0, T_PROP, T_LIMIT,
+};
 
 // config obs ----------------------------
 
@@ -2055,7 +2058,6 @@ void Objecter::_send_op_account(Op *op)
 
   if ((op->target.flags & (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE)) == (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE)){
     logger->inc(l_osdc_op_rmw);
-    dmclock_delta++; //dmclock specific
   }
   else if (op->target.flags & CEPH_OSD_FLAG_WRITE)
     logger->inc(l_osdc_op_w);
@@ -2805,6 +2807,8 @@ MOSDOp *Objecter::_prepare_osd_op(Op *op)
   m->set_dmclock_slo(cct->_conf->client_slo_iops_reserve,
 		     cct->_conf->client_slo_iops_prop, //m->get_priority(), //set priority as prop share
 		     cct->_conf->client_slo_iops_limit);
+  m->set_dmClock_param_delta(dmclock_delta.read());
+  m->set_dmClock_param_rho(dmclock_rho.read());
 
   logger->inc(l_osdc_op_send);
   logger->inc(l_osdc_op_send_bytes, m->get_data().length());
@@ -2821,8 +2825,10 @@ void Objecter::_send_op(Op *op, MOSDOp *m)
     assert(op->tid > 0);
     m = _prepare_osd_op(op);
   }
+  //dmclock
 
-  ldout(cct, 15) << "_send_op " << op->tid << " to osd." << op->session->osd << dendl;
+  ldout(cct, 0) << "_send_op " << op->tid << " to osd." << op->session->osd
+      << "total sends: "<< logger->get(l_osdc_op_send) << dendl;
 
   ConnectionRef con = op->session->con;
   assert(con);
@@ -2902,16 +2908,6 @@ void Objecter::unregister_op(Op *op)
 void Objecter::handle_osd_op_reply(MOSDOpReply *m)
 {
   ldout(cct, 10) << "in handle_osd_op_reply" << dendl;
-
-  //dmclock specific.
-  //note: not sure whether it's the right way to update R-tag
-  if(m->get_dmclock_service_tag() == 0){ // R-tag=0, P-tag=1
-      dmclock_rho++;
-      ldout(cct, 0) << "in handle_osd_op_reply: R-tag got serviced "
-	  <<" delta "<< dmclock_delta
-	  <<" rho "<< dmclock_rho
-	  << dendl;
-  }
 
   // get pio
   ceph_tid_t tid = m->get_tid();
@@ -3018,6 +3014,29 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
 
   l.unlock();
   lc.set_state(RWLock::Context::Untaken);
+
+  //dm_clock specific.
+  int service_tag = m->get_dmclock_service_tag();
+  int flags = m->get_flags();
+  if(flags & CEPH_OSD_FLAG_ONDISK){
+    switch(service_tag){
+      case T_RESERVE:
+	dmclock_rho.inc();
+      case T_PROP:
+	dmclock_delta.inc();
+	// log delta rho
+	ldout(cct, 0) << "in handle_osd_op_reply: tag " << service_tag
+	  << " prio " << m->get_priority()
+	  <<" type: "<< m->get_type_name()
+	  <<" delta "<< dmclock_delta.read()
+	  <<" rho " << dmclock_rho.read()
+	  << " req " << *m
+	  << dendl;
+	break;
+      default:
+	break;
+    }
+  }
 
   if (op->objver)
     *op->objver = m->get_user_version();

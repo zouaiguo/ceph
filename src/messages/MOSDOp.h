@@ -58,8 +58,6 @@ private:
   uint64_t features;
 
   // dmclock specific variables
-  __u32 dmclock_param_delta;
-  __u32 dmclock_param_rho;
   __u32 dmclock_slo_reserve;
   __u32 dmclock_slo_prop;
   __u32 dmclock_slo_limit;
@@ -110,8 +108,6 @@ public:
       osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),
       oid(_oid), oloc(_oloc), pgid(_pgid),
       features(feat),
-      dmclock_param_delta(1),
-      dmclock_param_rho(1),
       dmclock_slo_reserve(0),
       dmclock_slo_prop(1),
       dmclock_slo_limit(0){
@@ -129,8 +125,6 @@ public:
     dmclock_slo_prop = p;
     dmclock_slo_limit = l;
   }
-  __u32 get_dmClock_param_delta() const {return dmclock_param_delta;}
-  __u32 get_dmClock_param_rho() const { return dmclock_param_rho;}
   __u32 get_dmclock_slo_reserve() const { return dmclock_slo_reserve;}
   __u32 get_dmclock_slo_prop() const { return dmclock_slo_prop;}
   __u32 get_dmclock_slo_limit() const { return dmclock_slo_limit;}
@@ -291,8 +285,8 @@ struct ceph_osd_request_head {
       ::encode(retry_attempt, payload);
       ::encode(features, payload);
 
-      ::encode(dmclock_param_delta, payload);
-      ::encode(dmclock_param_rho, payload);
+      ::encode(dmclock_delta, payload);
+      ::encode(dmclock_rho, payload);
       ::encode(dmclock_slo_reserve, payload);
       ::encode(dmclock_slo_prop, payload);
       ::encode(dmclock_slo_limit, payload);
@@ -388,11 +382,12 @@ struct ceph_osd_request_head {
       else
 	features = 0;
 
-      ::decode(dmclock_param_delta, p);
-      ::decode(dmclock_param_rho, p);
+      ::decode(dmclock_delta, p);
+      ::decode(dmclock_rho, p);
       ::decode(dmclock_slo_reserve, p);
       ::decode(dmclock_slo_prop, p);
       ::decode(dmclock_slo_limit, p);
+      ::decode(service_tag, p);
 
     }
 
