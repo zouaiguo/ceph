@@ -62,6 +62,9 @@ static const __SWORD_TYPE ZFS_SUPER_MAGIC(0x2fc12fc1);
 #endif
 #endif
 
+#ifndef O_NOCMTIME
+#define O_NOCMTIME     040000000
+#endif
 
 class FileStoreBackend;
 
