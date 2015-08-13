@@ -2828,7 +2828,10 @@ void Objecter::_send_op(Op *op, MOSDOp *m)
   //dmclock
 
   ldout(cct, 0) << "_send_op " << op->tid << " to osd." << op->session->osd
-      << "total sends: "<< logger->get(l_osdc_op_send) << dendl;
+      << " total sends: "<< logger->get(l_osdc_op_send)
+      << " op_in_flignt "<< inflight_ops.read()
+      << " uncommited ops "<< num_uncommitted.read()
+      << dendl;
 
   ConnectionRef con = op->session->con;
   assert(con);

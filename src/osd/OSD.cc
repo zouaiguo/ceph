@@ -8235,14 +8235,14 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
   ShardData* sdata = shard_list[shard_index];
   assert(NULL != sdata);
   sdata->sdata_op_ordering_lock.Lock();
-  if (sdata->pqueue.empty()) {
+  if (sdata->pqueue.empty() || !sdata->pqueue.is_avaialbe_dmClock()) {
     sdata->sdata_op_ordering_lock.Unlock();
     osd->cct->get_heartbeat_map()->reset_timeout(hb, 4, 0);
     sdata->sdata_lock.Lock();
     sdata->sdata_cond.WaitInterval(osd->cct, sdata->sdata_lock, utime_t(2, 0));
     sdata->sdata_lock.Unlock();
     sdata->sdata_op_ordering_lock.Lock();
-    if(sdata->pqueue.empty()) {
+    if(sdata->pqueue.empty() || !sdata->pqueue.is_avaialbe_dmClock()) {
       sdata->sdata_op_ordering_lock.Unlock();
       return;
     }
@@ -8351,17 +8351,17 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
   }
 
   sdata->sdata_op_ordering_lock.Unlock();
-
-//  {//dm_clock
-//    lgeneric_subdout(osd->cct, osd, 0) << "enqueue status: ";
-//    Formatter *f = Formatter::create("json-pretty"); //"json"
-//    f->open_object_section("q");
-//    dump(f);
-//    f->close_section();
-//    f->flush(*_dout);
-//    delete f;
-//    *_dout << dendl;
-//  }
+  //dm_clock log
+  if (priority < CEPH_MSG_PRIO_LOW){
+    lgeneric_subdout(osd->cct, osd, 0) << "enqueue status: ";
+    Formatter *f = Formatter::create("json-pretty"); //"json"
+    f->open_object_section("q");
+    dump(f);
+    f->close_section();
+    f->flush(*_dout);
+    delete f;
+    *_dout << dendl;
+  }
   sdata->sdata_lock.Lock();
   sdata->sdata_cond.SignalOne();
   sdata->sdata_lock.Unlock();
