@@ -390,21 +390,25 @@ fi
         keyring = $keyring_fn
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
+	client slo iops reserve = 10	
+	client slo iops prop = 10
+	client slo iops limit = 12
+
 
 [client.foo1]
         keyring = $keyring_fn
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
-	client slo iops reserve = 250	
-	client slo iops prop = 100
+	client slo iops reserve = 10	
+	client slo iops prop = 10
 	client slo iops limit = 0
 
 [client.foo2]
         keyring = $keyring_fn
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
-	client slo iops reserve = 250
-	client slo iops prop = 200
+	client slo iops reserve = 10
+	client slo iops prop = 20
 	client slo iops limit = 0
 
 [client.foo3]
@@ -412,8 +416,8 @@ fi
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
 	client slo iops reserve = 0
-	client slo iops prop = 300
-	client slo iops limit = 100
+	client slo iops prop = 30
+	client slo iops limit = 15
 
 [mds]
 $DAEMONOPTS
@@ -424,6 +428,7 @@ $CMDSDEBUG
         mds data = $CEPH_DEV_DIR/mds.\$id
 $extra_conf
 [osd]
+ 
 $DAEMONOPTS
         osd data = $CEPH_DEV_DIR/osd\$id
         osd journal = $journal_path
@@ -432,8 +437,8 @@ $DAEMONOPTS
         osd class dir = $OBJCLASS_PATH
         osd scrub load threshold = 5.0
         osd debug op order = true
-	osd max throughput = 500
-	osd op num threads per shard = 1
+	osd max throughput = 20
+	osd op num threads per shard = 1 
 	osd op num shards = 1
         filestore wbthrottle xfs ios start flusher = 10
         filestore wbthrottle xfs ios hard limit = 20

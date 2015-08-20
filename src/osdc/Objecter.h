@@ -30,6 +30,8 @@
 #include <map>
 #include <memory>
 #include <sstream>
+
+#include <math.h>
 using namespace std;
 
 class Context;
@@ -1672,12 +1674,17 @@ public:
     int incarnation;
     int num_locks;
     ConnectionRef con;
+    // dmclock specific
+    atomic_t last_tid;
+    atomic_t inflight_ops_per_osd;
 
     OSDSession(CephContext *cct, int o) :
       lock("OSDSession"),
       osd(o),
       incarnation(0),
-      con(NULL)
+      con(NULL),
+      last_tid(0),
+      inflight_ops_per_osd(0)
     {
       num_locks = cct->_conf->objecter_completion_locks_per_session;
       completion_locks = new Mutex *[num_locks];

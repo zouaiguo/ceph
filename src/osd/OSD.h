@@ -429,11 +429,12 @@ class PGQueueable {
 	(*op)->get_req()->set_dmClock_param_rho(rho);
     }
   }
-  void set_service_tag(int service_tag){
+  void set_service_tag_and_ratio(int service_tag, double_t ratio){
     OpRequestRef *op = boost::get<OpRequestRef>(&qvariant);
     if(op){
-	//Message * m = (*op)->get_req();
-	(*op)->get_req()->set_dmclock_service_tag(service_tag);
+      //Message * m = (*op)->get_req();
+      (*op)->get_req()->set_dmclock_service_tag(service_tag);
+      (*op)->get_req()->set_dmclock_r_to_p_ratio(ratio);
     }
   }
 };

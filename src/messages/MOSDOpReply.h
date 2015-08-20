@@ -219,6 +219,7 @@ public:
       ::encode(dmclock_slo_prop, payload);
       ::encode(dmclock_slo_limit, payload);
       ::encode(service_tag, payload);
+      ::encode(r_to_p_ratio, payload);
     }
   }
   virtual void decode_payload() {
@@ -282,6 +283,7 @@ public:
       ::decode(dmclock_slo_prop, p);
       ::decode(dmclock_slo_limit, p);
       ::decode(service_tag, p);
+      ::decode(r_to_p_ratio, p);
     }
   }
 

@@ -262,6 +262,7 @@ protected:
   //dmclock specific
   uint64_t dmclock_delta, dmclock_rho;
   __s8 service_tag;
+  __s16 r_to_p_ratio;
 
 public:
   Message()
@@ -271,7 +272,8 @@ public:
       byte_throttler(NULL),
       msg_throttler(NULL),
       dispatch_throttle_size(0),
-      service_tag(-1) {
+      service_tag(-1),
+      r_to_p_ratio(0){
     memset(&header, 0, sizeof(header));
     memset(&footer, 0, sizeof(footer));
   }
@@ -478,9 +480,14 @@ public:
     service_tag = (signed char)tag_type;
   }
   virtual int get_dmclock_service_tag() const{
-      return (int)service_tag;;
+    return (int)service_tag;
   }
-
+  virtual void set_dmclock_r_to_p_ratio (double_t ratio){
+    r_to_p_ratio = (unsigned short)(ratio * 10000);
+  }
+  virtual double_t get_dmclock_r_to_p_ratio() const{
+    return 1.0 * r_to_p_ratio / 10000;
+  }
 };
 typedef boost::intrusive_ptr<Message> MessageRef;
 

@@ -4378,7 +4378,6 @@ void OSD::ms_handle_fast_accept(Connection *con)
 bool OSD::ms_handle_reset(Connection *con)
 {
   OSD::Session *session = (OSD::Session *)con->get_priv();
-  dout(0) << "ms_handle_reset con " << con << " session " << session << dendl; // dm_clock
   if (!session)
     return false;
 
@@ -4387,7 +4386,7 @@ bool OSD::ms_handle_reset(Connection *con)
   entity_name_t name(session->entity_name.get_type(), session->num);
   entity_inst_t client_id(name, session->con->get_peer_addr());
   op_shardedwq.purge_idle_client_in_shards(client_id);
-  lgeneric_subdout(cct, osd, 0) << "dm_clock: client "<< client_id<<" died (id: "<<session->entity_name.get_id() << dendl;
+  lgeneric_subdout(cct, osd, 1) << "dm_clock: client "<< client_id<<" died (id: "<<session->entity_name.get_id() << " )"<< dendl;
 
   session->wstate.reset();
   session->con.reset(NULL);  // break con <-> session ref cycle
@@ -8217,7 +8216,7 @@ void OSD::enqueue_op(PG *pg, OpRequestRef& op)
 //          << " latency " << latency
 //          << " " << *(op->get_req()) << dendl;
   //dmclock specific
-  dout(0) << "enqueue_op " << op << " prio:" << op->get_req()->get_priority()
+  dout(15) << "enqueue_op " << op << " prio:" << op->get_req()->get_priority()
       << " msg type: " << op->get_req()->get_type_name()
       << " R: " << op->get_req()->get_dmclock_slo_reserve()
       << " P: " << op->get_req()->get_dmclock_slo_prop()
@@ -8250,8 +8249,11 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
   //dmclock specific
   //  pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue();
   int service_tag = -1;
-  pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue_dmClock(service_tag);
-  lgeneric_subdout(osd->cct, osd, 0) << "dequeue service tag " << service_tag << dendl;
+  double r_to_p_ratio = 0.0;
+  pair<PGRef, PGQueueable> item = sdata->pqueue.dequeue_dmClock(service_tag, r_to_p_ratio);
+  lgeneric_subdout(osd->cct, osd, 15) << "dequeue service tag " << service_tag
+    << " ratio "<< r_to_p_ratio
+    << dendl;
 
   sdata->pg_for_processing[&*(item.first)].push_back(item.second);
   sdata->sdata_op_ordering_lock.Unlock();
@@ -8273,7 +8275,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
     if (!(sdata->pg_for_processing[&*(item.first)].size()))
       sdata->pg_for_processing.erase(&*(item.first));
     //dmclock
-    op->set_service_tag(service_tag);
+    op->set_service_tag_and_ratio(service_tag, r_to_p_ratio);
   }  
 
   // osd:opwq_process marks the point at which an operation has been dequeued
@@ -8291,14 +8293,14 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
 
   //lgeneric_subdout(osd->cct, osd, 30) << "dequeue status: ";
   if(service_tag >= 0 ){
-      lgeneric_subdout(osd->cct, osd, 0) << "dequeue status: ";
-      Formatter *f = Formatter::create("json-pretty"); //"json"
-      f->open_object_section("q");
-      dump(f);
-      f->close_section();
-      f->flush(*_dout);
-      delete f;
-      *_dout << dendl;
+    lgeneric_subdout(osd->cct, osd, 1) << "dequeue status: ";
+    Formatter *f = Formatter::create("json-pretty"); //"json"
+    f->open_object_section("q");
+    dump(f);
+    f->close_section();
+    f->flush(*_dout);
+    delete f;
+    *_dout << dendl;
   }
   op->run(osd, item.first, tp_handle);
 
@@ -8343,7 +8345,7 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
       reservation, prop, limit, delta, rho, cost, item);
     //dmclock debug
 
-    lgeneric_subdout(osd->cct, osd, 0) << "dm_clock enqueue client_id: "<<item.second.get_owner()
+    lgeneric_subdout(osd->cct, osd, 1) << "dm_clock enqueue client_id: "<<item.second.get_owner()
       << " prio "<< priority
       << " rho " << rho
       << " delta " << delta
@@ -8353,7 +8355,7 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
   sdata->sdata_op_ordering_lock.Unlock();
   //dm_clock log
   if (priority < CEPH_MSG_PRIO_LOW){
-    lgeneric_subdout(osd->cct, osd, 0) << "enqueue status: ";
+    lgeneric_subdout(osd->cct, osd, 15) << "enqueue status: ";
     Formatter *f = Formatter::create("json-pretty"); //"json"
     f->open_object_section("q");
     dump(f);
@@ -8396,7 +8398,6 @@ void OSD::ShardedOpWQ::_enqueue_front(pair<PGRef, PGQueueable> item) {
   else{
     sdata->pqueue.enqueue_front_dmClock(item.second.get_owner(), reservation,
 	prop, limit, delta, rho, cost, item);
-    lgeneric_subdout(osd->cct, osd, 0) << "dm_clock enqueue_front client_id: "<<item.second.get_owner() <<dendl;
   }
   sdata->sdata_op_ordering_lock.Unlock();
   sdata->sdata_lock.Lock();
