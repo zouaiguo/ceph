@@ -30,6 +30,16 @@ public:
   void send_response();
 };
 
+class RGWListBuckets_ObjStore_Goog : public RGWListBuckets_ObjStore {
+public:
+  RGWListBuckets_ObjStore_Goog() {}
+  virtual ~RGWListBuckets_ObjStore_Goog() {}
+
+  int get_params();
+  void send_response_begin(bool has_buckets);
+  void send_response_data(RGWUserBuckets& buckets);
+  void send_response_end();
+};
 class RGWHandler_ObjStore_Goog : public RGWHandler_ObjStore {
   friend class RGWRESTMgr_Goog;
 public:
@@ -67,7 +77,7 @@ protected:
   }
   RGWOp *get_obj_op(bool get_data);
 
-  RGWOp *op_get(){};
+  RGWOp *op_get();
   RGWOp *op_head(){};
   RGWOp *op_put(){};
   RGWOp *op_delete();

@@ -33,15 +33,16 @@ void list_all_buckets_end(struct req_state *s)
 {
   s->formatter->close_section();
 }
-
-void dump_bucket(struct req_state *s, RGWBucketEnt& obj)
+#endif
+static void dump_bucket(struct req_state *s, RGWBucketEnt& obj)
 {
-  s->formatter->open_object_section("Bucket");
-  s->formatter->dump_string("Name", obj.bucket.name);
-  dump_time(s, "CreationDate", &obj.creation_time);
+  s->formatter->open_object_section("bucket");
+  s->formatter->dump_string("kind", "storage#bucket");
+  s->formatter->dump_string("name", obj.bucket.name);
+  dump_time(s, "timeCreated", &obj.creation_time);
   s->formatter->close_section();
 }
-
+#if 0
 void rgw_get_errno_goog(rgw_http_errors *e , int err_no)
 {
   const struct rgw_http_errors *r;
@@ -185,20 +186,31 @@ send_data:
 
   return 0;
 }
+#endif
 
-
+int RGWListBuckets_ObjStore_Goog::get_params()
+{
+  char *endptr;
+  limit = strtol(s->info.args.get("maxResuls").c_str(), &endptr, 10);
+  if(endptr){
+    while(*endptr && isspace(*endptr))
+      ++endptr;
+    if(*endptr)
+      return -EINVAL;
+  }
+  return 0;
+}
 void RGWListBuckets_ObjStore_Goog::send_response_begin(bool has_buckets)
 {
   if (ret)
     set_req_state_err(s, ret);
   dump_errno(s);
   dump_start(s);
-  end_header(s, NULL, "application/xml");
-
+  end_header(s);
   if (!ret) {
     list_all_buckets_start(s);
-    dump_owner(s, s->user.user_id, s->user.display_name);
-    s->formatter->open_array_section("Buckets");
+    s->formatter->dump_string("kind", "storage#buckets");
+    s->formatter->open_array_section("itmes");
     sent_data = true;
   }
 }
@@ -227,22 +239,15 @@ void RGWListBuckets_ObjStore_Goog::send_response_end()
   }
 }
 
+#if 0
 int RGWListBucket_ObjStore_Goog::get_params()
 {
-  list_versions = s->info.args.exists("versions");
   prefix = s->info.args.get("prefix");
-  if (!list_versions) {
-    marker = s->info.args.get("marker");
-  } else {
-    marker.name = s->info.args.get("key-marker");
-    marker.instance = s->info.args.get("version-id-marker");
-  }
-  max_keys = s->info.args.get("max-keys");
+  max_keys = s->info.args.get("maxResuls");
   ret = parse_max_keys();
   if (ret < 0) {
     return ret;
   }
-  delimiter = s->info.args.get("delimiter");
   return 0;
 }
 
@@ -588,7 +593,6 @@ void RGWCreateBucket_ObjStore_Goog::send_response()
     return;
 
     JSONFormatter f; /* use json formatter for system requests output */
-
     f.open_object_section("Object");
     encode_json("name", s->bucket_name_str, &f);
     f.close_section();
@@ -1761,13 +1765,13 @@ void RGWListBucketMultiparts_ObjStore_Goog::send_response()
     set_req_state_err(s, ret);
   dump_errno(s);
 
-  end_header(s, this, "application/xml");
+  end_header(s);
   dump_start(s);
   if (ret < 0)
     return;
 
-  s->formatter->open_object_section("ListMultipartUploadsResult");
-  s->formatter->dump_string("Bucket", s->bucket_name_str);
+  s->formatter->open_object_section("object");
+  s->formatter->dump_string("kind", );
   if (!prefix.empty())
     s->formatter->dump_string("ListMultipartUploadsResult.Prefix", prefix);
   string& key_marker = marker.get_key();
@@ -1898,10 +1902,14 @@ RGWOp *RGWHandler_ObjStore_Bucket_Goog::get_obj_op(bool get_data)
   else
     return new RGWStatBucket_ObjStore_Goog;
 }
-
+#endif
 RGWOp *RGWHandler_ObjStore_Bucket_Goog::op_get()
 {
-  if (s->info.args.sub_resource_exists("logging"))
+  ldout(s->cct, 20) << "s->is_bucket" << s->is_bucket << dendl;
+  if(s->is_bucket == true)
+    return new RGWListBuckets_ObjStore_Goog;
+/*
+  else if (s->info.args.sub_resource_exists("logging"))
     return new RGWGetBucketLogging_ObjStore_Goog;
 
   if (s->info.args.sub_resource_exists("location"))
@@ -1918,8 +1926,9 @@ RGWOp *RGWHandler_ObjStore_Bucket_Goog::op_get()
     return new RGWListBucketMultiparts_ObjStore_Goog;
   }
   return get_obj_op(true);
+  */
 }
-
+#if 0
 RGWOp *RGWHandler_ObjStore_Bucket_Goog::op_head()
 {
   if (is_acl_op()) {
@@ -2043,11 +2052,12 @@ int RGWHandler_ObjStore_Goog::init_from_header(struct req_state *s, int default_
 
   const char *req_name = s->relative_uri.c_str();
   const char *p;
-  int pos = s->relative_uri.find("?");
-  if(pos != string::npos){
-    if(req_name[pos-1] == 'b')
+  ldout(s->cct, 20) << "relative uri : " << s->relative_uri << dendl;
+  string::reverse_iterator itr = s->relative_uri.rbegin();
+    if(*itr == 'b'){
+      ldout(s->cct, 20) << "is bucket" << dendl;
       s->is_bucket = true;
-  }
+    }
   if (*req_name == '?') {
     p = req_name;
   } else {

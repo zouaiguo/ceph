@@ -1124,7 +1124,7 @@ int main(int argc, const char **argv)
     rest.register_resource("oauth/singin", set_logging(new RGWRESTMgr_GOOG_Auth));
     rest.register_resource("oauth/redirect", set_logging(new RGWRESTMgr_GOOG_Auth_Rdr));
 
-    rest.register_resource("goog/b", set_logging(new RGWRESTMgr_Goog));
+    rest.register_resource("goog", set_logging(new RGWRESTMgr_Goog));
   if (apis_map.count("admin") > 0) {
     RGWRESTMgr_Admin *admin_resource = new RGWRESTMgr_Admin;
     admin_resource->register_resource("usage", new RGWRESTMgr_Usage);

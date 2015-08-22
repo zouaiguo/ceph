@@ -3456,6 +3456,7 @@ int RGWHandler::do_read_permissions(RGWOp *op, bool only_bucket)
 RGWOp *RGWHandler::get_op(RGWRados *store)
 {
   RGWOp *op;
+    ldout(s->cct, 20) << "op : " << s->op << dendl;
   switch (s->op) {
    case OP_GET:
      op = op_get();
