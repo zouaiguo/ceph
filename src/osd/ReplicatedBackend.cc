@@ -1818,6 +1818,10 @@ bool ReplicatedBackend::handle_pull_response(
     for (map<string, bufferlist>::iterator it = pop.attrset.begin();
          it != pop.attrset.end();
          ++it) {
+      if (it->second.length() == 0) {
+         dout(20) << __func__ << " oid " << hoid << " attr " << it->first
+                  << " len is 0" << dendl;
+      }
       it->second.rebuild();
     }
     pi.obc = get_parent()->get_obc(pi.recovery_info.soid, pop.attrset);

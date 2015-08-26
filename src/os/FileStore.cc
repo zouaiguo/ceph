@@ -2436,6 +2436,7 @@ unsigned FileStore::_do_transaction(
       {
         coll_t cid = i.get_cid(op->cid);
         ghobject_t oid = i.get_oid(op->oid);
+        dout(10) << " cid " << cid << " oid " << oid << " setattr" << dendl;
 	_kludge_temp_object_collection(cid, oid);
         string name = i.decode_string();
         bufferlist bl;
@@ -2457,6 +2458,7 @@ unsigned FileStore::_do_transaction(
       {
         coll_t cid = i.get_cid(op->cid);
         ghobject_t oid = i.get_oid(op->oid);
+        dout(10) << " cid " << cid << " oid " << oid << " setattrs" << dendl;
 	_kludge_temp_object_collection(cid, oid);
         map<string, bufferptr> aset;
         i.decode_attrset(aset);
@@ -2687,6 +2689,7 @@ unsigned FileStore::_do_transaction(
       {
         coll_t cid = i.get_cid(op->cid);
         ghobject_t oid = i.get_oid(op->oid);
+        dout(10) << " cid " << cid << " oid " << oid << " setkeys" << dendl;
 	_kludge_temp_object_collection(cid, oid);
         map<string, bufferlist> aset;
         i.decode_attrset(aset);
