@@ -422,55 +422,67 @@ int rgw_bucket_list(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 
   bufferlist bl;
 
-  map<string, bufferlist> keys;
   string start_key;
+  bool done;
   encode_list_index_key(hctx, op.start_obj, &start_key);
-  rc = get_obj_vals(hctx, start_key, op.filter_prefix, op.num_entries + 1, &keys);
-  if (rc < 0)
-    return rc;
-
   std::map<string, struct rgw_bucket_dir_entry>& m = new_dir.m;
-  std::map<string, bufferlist>::iterator kiter = keys.begin();
-  uint32_t i;
+  size_t total_entries = 0;
 
-  bool done = false;
+  do {
+    CLS_LOG(20, "start_key=%s", start_key.c_str());
+    map<string, bufferlist> keys;
+    rc = get_obj_vals(hctx, start_key, op.filter_prefix, op.num_entries + 1, &keys);
+    if (rc < 0)
+      return rc;
 
-  for (i = 0; i < op.num_entries && kiter != keys.end(); ++i, ++kiter) {
-    struct rgw_bucket_dir_entry entry;
+    done = (keys.size() < op.num_entries + 1);
 
-    if (!bi_is_objs_index(kiter->first)) {
-      done = true;
-      break;
+    std::map<string, bufferlist>::iterator kiter = keys.begin();
+    uint32_t i;
+
+    for (i = 0; i < op.num_entries + 1 && kiter != keys.end(); ++i, ++kiter) {
+      struct rgw_bucket_dir_entry entry;
+
+      if (!bi_is_objs_index(kiter->first)) {
+        done = true;
+        break;
+      }
+
+      bufferlist& entrybl = kiter->second;
+      bufferlist::iterator eiter = entrybl.begin();
+      try {
+        ::decode(entry, eiter);
+      } catch (buffer::error& err) {
+        CLS_LOG(1, "ERROR: rgw_bucket_list(): failed to decode entry, key=%s\n", kiter->first.c_str());
+        return -EINVAL;
+      }
+
+      cls_rgw_obj_key key;
+      uint64_t ver;
+      decode_list_index_key(kiter->first, &key, &ver);
+
+      start_key = kiter->first;
+
+      if (!entry.is_valid()) {
+        CLS_LOG(20, "entry %s[%s] is not valid\n", key.name.c_str(), key.instance.c_str());
+        continue;
+      }
+
+      if (!op.list_versions && !entry.is_visible()) {
+        CLS_LOG(20, "entry %s[%s] is not visible\n", key.name.c_str(), key.instance.c_str());
+        continue;
+      }
+
+      if (i < op.num_entries) {
+        m[kiter->first] = entry;
+      }
+      ++total_entries;
+
+      CLS_LOG(20, "got entry %s[%s] m.size()=%d\n", key.name.c_str(), key.instance.c_str(), (int)m.size());
     }
+  } while (!done && (total_entries < op.num_entries + 1));
 
-    bufferlist& entrybl = kiter->second;
-    bufferlist::iterator eiter = entrybl.begin();
-    try {
-      ::decode(entry, eiter);
-    } catch (buffer::error& err) {
-      CLS_LOG(1, "ERROR: rgw_bucket_list(): failed to decode entry, key=%s\n", kiter->first.c_str());
-      return -EINVAL;
-    }
-
-    cls_rgw_obj_key key;
-    uint64_t ver;
-    decode_list_index_key(kiter->first, &key, &ver);
-
-    if (!entry.is_valid()) {
-      CLS_LOG(20, "entry %s[%s] is not valid\n", key.name.c_str(), key.instance.c_str());
-      continue;
-    }
-
-    if (!op.list_versions && !entry.is_visible()) {
-      CLS_LOG(20, "entry %s[%s] is not visible\n", key.name.c_str(), key.instance.c_str());
-      continue;
-    }
-    m[kiter->first] = entry;
-
-    CLS_LOG(20, "got entry %s[%s] m.size()=%d\n", key.name.c_str(), key.instance.c_str(), (int)m.size());
-  }
-
-  ret.is_truncated = (kiter != keys.end() && !done);
+  ret.is_truncated = !done;
 
   ::encode(ret, *out);
   return 0;
