@@ -97,11 +97,24 @@ is_err() const
   return !(http_ret >= 200 && http_ret <= 399);
 }
 
+// The requestURI transferred from the frontend can be abs_path or absoluteURI
+// If it is absoluteURI, we should adjust it to abs_path for the following 
+// S3 authorization and some other processes depending on the requestURI
+// The absoluteURI can start with "http://", "https://", "ws://" or "wss://"
+static string get_abs_path(const string &request_uri) {
+  int beg_pos = request_uri.find("://") + 3;
+  int len = request_uri.size();
+  beg_pos = request_uri.find('/', beg_pos);
+  return  request_uri.substr(beg_pos, len - beg_pos);
+}
 
 req_info::req_info(CephContext *cct, class RGWEnv *e) : env(e) {
   method = env->get("REQUEST_METHOD");
   script_uri = env->get("SCRIPT_URI", cct->_conf->rgw_script_uri.c_str());
   request_uri = env->get("REQUEST_URI", cct->_conf->rgw_request_uri.c_str());
+  if(request_uri[0] != '/') {
+    request_uri = get_abs_path(request_uri);
+  }
   int pos = request_uri.find('?');
   if (pos >= 0) {
     request_params = request_uri.substr(pos + 1);
