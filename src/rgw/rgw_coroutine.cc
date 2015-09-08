@@ -218,7 +218,7 @@ int RGWCoroutinesManager::run(list<RGWCoroutinesStack *>& stacks)
   env.manager = this;
   env.stacks = &stacks;
 
-  for (list<RGWCoroutinesStack *>::iterator iter = stacks.begin(); iter != stacks.end();) {
+  for (list<RGWCoroutinesStack *>::iterator iter = stacks.begin(); iter != stacks.end() && !going_down.read();) {
     RGWCoroutinesStack *stack = *iter;
     env.stack = stack;
 
@@ -270,6 +270,10 @@ int RGWCoroutinesManager::run(list<RGWCoroutinesStack *>& stacks)
       int ret = completion_mgr.get_next((void **)&blocked_stack);
       if (ret < 0) {
 	ldout(cct, 0) << "ERROR: failed to clone shard, completion_mgr.get_next() returned ret=" << ret << dendl;
+      }
+      if (going_down.read() > 0) {
+	ldout(cct, 5) << __func__ << "(): was stopped, exiting" << dendl;
+	return 0;
       }
       handle_unblocked_stack(stacks, blocked_stack, &blocked_count);
       iter = stacks.begin();
