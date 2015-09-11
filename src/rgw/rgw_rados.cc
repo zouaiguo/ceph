@@ -2176,7 +2176,7 @@ class RGWSyncProcessorThread : public RGWRadosThread {
   uint64_t interval_msec() {
     return 0; /* no interval associated, it'll run once until stopped */
   }
-  void stop_processor() {
+  void stop_process() {
     sync.stop();
   }
 public:
@@ -2257,18 +2257,18 @@ int RGWRados::get_max_chunk_size(rgw_bucket& bucket, uint64_t *max_chunk_size)
 
 void RGWRados::finalize()
 {
+  if (run_sync_thread) {
+    Mutex::Locker l(sync_thread_lock);
+    sync_processor_thread->stop();
+    delete sync_processor_thread;
+    sync_processor_thread = NULL;
+  }
   if (finisher) {
     finisher->stop();
     delete finisher;
   }
   if (need_watch_notify()) {
     finalize_watch();
-  }
-  if (run_sync_thread) {
-    Mutex::Locker l(sync_thread_lock);
-    sync_processor_thread->stop();
-    delete sync_processor_thread;
-    sync_processor_thread = NULL;
   }
   delete meta_mgr;
   delete data_log;
