@@ -278,18 +278,14 @@ class PrioritizedQueue {
     SLO slo;
     utime_t when_idled;
 
-    // osd's measurement of total IO done
-    // in-between two consecutive request to this 'cl'
+    // a local count of total IO done for this 'cl'
     double_t delta_local;
-    // osd's measurement of total R-IO done
-    // in-between two consecutive request to this 'cl'
+    // a remote count of total IO done for this 'cl'
     double_t delta_remote;
 
-    // client's measurement of total R-IO done
-    // in-between two consecutive request to this 'cl'
+    // a local count of total R-IO done for this 'cl'
     double_t rho_local;
-    // client's measurement of total IO done
-    // in-between two consecutive request to this 'cl'
+    // a remote count of total R-IO done for this 'cl'
     double_t rho_remote;
     // R-tag to P-tag ratio
     double_t r_to_p_ratio;
@@ -386,15 +382,15 @@ class PrioritizedQueue {
 	if (tag->selected_tag == T_RESERVE) {
 	  if (tag->slo.reserve)
 	    tag->r_deadline.set_from_double(
-		tag->r_deadline + MAX(1.0 , record.rho) * tag->r_spacing);
+		tag->r_deadline + MAX(1.0 , record.rho - tag->rho_local) * tag->r_spacing);
 	}
 	if (tag->slo.prop) {
 	  tag->p_deadline.set_from_double(
-	      tag->p_deadline + MAX(1.0 , record.delta) * tag->p_spacing);
+	      tag->p_deadline + MAX(1.0 , record.delta - tag->delta_local) * tag->p_spacing);
 	}
 	if (tag->slo.limit) {
 	  tag->l_deadline.set_from_double(
-	      tag->l_deadline + MAX(1.0 , record.delta) * tag->l_spacing);
+	      tag->l_deadline + MAX(1.0 , record.delta - tag->delta_local) * tag->l_spacing);
 	}
       }
 
@@ -409,18 +405,18 @@ class PrioritizedQueue {
 	  if (tag->slo.reserve){
 	    tag->r_deadline.set_from_double(
 		MAX(tag->r_deadline +
-		    MAX(1.0 , record.rho) * tag->r_spacing , now));
+		    MAX(1.0 , record.rho - tag->rho_local) * tag->r_spacing , now));
 	  }
 	}
 	if (tag->slo.prop)
 	  tag->p_deadline.set_from_double(
 	      MAX(tag->p_deadline +
-		  MAX(1.0 , record.delta) * tag->p_spacing , now));
+		  MAX(1.0 , record.delta - tag->delta_local) * tag->p_spacing , now));
 
 	if (tag->slo.limit)
 	  tag->l_deadline.set_from_double(
 	      MAX(tag->l_deadline +
-		  MAX(1.0 , record.delta) * tag->l_spacing , now));
+		  MAX(1.0 , record.delta - tag->delta_local) * tag->l_spacing , now));
 
       }
 
@@ -766,8 +762,6 @@ class PrioritizedQueue {
 	data << print_current_tag(T_NONE) << std::endl;
 	return data.str();
       }
-
-
   };
 
   typedef std::map<unsigned, SubQueue> SubQueues;

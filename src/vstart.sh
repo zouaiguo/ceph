@@ -243,9 +243,9 @@ else
         debug auth = 20
         debug ms = 1'
     COSDDEBUG='
-        debug ms = 0
-        debug osd = 0
-        debug objecter = 0
+        debug ms = 1
+        debug osd = 1
+        debug objecter = 1
         debug monc = 0
         debug journal = 0
         debug filestore = 0

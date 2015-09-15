@@ -2808,6 +2808,8 @@ MOSDOp *Objecter::_prepare_osd_op(Op *op)
 		     cct->_conf->client_slo_iops_prop,
 		     cct->_conf->client_slo_iops_limit);
 
+  m->set_dmClock_param_delta(dmclock_delta.read());
+  m->set_dmClock_param_rho(dmclock_rho.read());
   logger->inc(l_osdc_op_send);
   logger->inc(l_osdc_op_send_bytes, m->get_data().length());
 
@@ -2823,26 +2825,10 @@ void Objecter::_send_op(Op *op, MOSDOp *m)
     assert(op->tid > 0);
     m = _prepare_osd_op(op);
   }
-  // dmclock -- estimating delta and rho
-  // note: delta estimation is accurate, but rho isn't. it's approximated
-  // by this eqn: delta* received_rho_in_the_past/received_delta_in_the_past
-  int64_t delta = op->tid;
-  delta -= op->session->last_tid.read();
-  m->set_dmClock_param_delta(delta);
-
-  int64_t rho = 1;
-  if(delta > 1 &&
-      (dmclock_delta.read() > 1 || dmclock_rho.read() > 1 )){
-   rho = ceil(1.0 * delta * dmclock_rho.read() / dmclock_delta.read());
-  }
-  m->set_dmClock_param_rho(rho);
-  // update accounting info
-  op->session->last_tid.set(op->tid);
   op->session->inflight_ops_per_osd.inc();
 
+  //TODO: dmclock -- estimating delta and rho
   ldout(cct, 1) << "_send_op " << op->tid << " to osd." << op->session->osd
-      << " delta " << delta
-      << " rho " << rho
       << " total sends: "<< logger->get(l_osdc_op_send)
       << " op_in_flignt "<< inflight_ops.read()
       << "\n"
