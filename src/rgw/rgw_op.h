@@ -426,7 +426,7 @@ protected:
   string etag;
   bool chunked_upload;
   RGWAccessControlPolicy policy;
-  const char *obj_manifest;
+  const char *dlo_manifest;
   time_t mtime;
 
   MD5 *user_manifest_parts_hash;
@@ -443,7 +443,7 @@ public:
     if_match = NULL;
     if_nomatch = NULL;
     chunked_upload = false;
-    obj_manifest = NULL;
+    dlo_manifest = NULL;
     mtime = 0;
     user_manifest_parts_hash = NULL;
     olh_epoch = 0;

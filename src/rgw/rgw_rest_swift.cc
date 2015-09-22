@@ -513,7 +513,7 @@ int RGWPutObj_ObjStore_SWIFT::get_params()
 
   policy.create_default(s->user.user_id, s->user.display_name);
 
-  obj_manifest = s->info.env->get("HTTP_X_OBJECT_MANIFEST");
+  dlo_manifest = s->info.env->get("HTTP_X_OBJECT_MANIFEST");
 
   return RGWPutObj_ObjStore::get_params();
 }

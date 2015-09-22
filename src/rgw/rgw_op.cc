@@ -1776,7 +1776,7 @@ void RGWPutObj::execute()
   map<string, string>::iterator iter;
   bool multipart;
 
-  bool need_calc_md5 = (obj_manifest == NULL);
+  bool need_calc_md5 = (dlo_manifest == NULL);
 
 
   perfcounter->inc(l_rgw_put);
@@ -1917,7 +1917,7 @@ void RGWPutObj::execute()
   policy.encode(aclbl);
 
   attrs[RGW_ATTR_ACL] = aclbl;
-  if (obj_manifest) {
+  if (dlo_manifest) {
     bufferlist manifest_bl;
     string manifest_obj_prefix;
     string manifest_bucket;
@@ -1925,13 +1925,13 @@ void RGWPutObj::execute()
     char etag_buf[CEPH_CRYPTO_MD5_DIGESTSIZE];
     char etag_buf_str[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 16];
 
-    manifest_bl.append(obj_manifest, strlen(obj_manifest) + 1);
+    manifest_bl.append(dlo_manifest, strlen(dlo_manifest) + 1);
     attrs[RGW_ATTR_USER_MANIFEST] = manifest_bl;
     user_manifest_parts_hash = &hash;
-    string prefix_str = obj_manifest;
+    string prefix_str = dlo_manifest;
     int pos = prefix_str.find('/');
     if (pos < 0) {
-      ldout(s->cct, 0) << "bad user manifest, missing slash separator: " << obj_manifest << dendl;
+      ldout(s->cct, 0) << "bad user manifest, missing slash separator: " << dlo_manifest << dendl;
       goto done;
     }
 
