@@ -417,12 +417,51 @@ struct rgw_slo_entry {
   string etag;
   uint64_t size_bytes;
 
+  rgw_slo_entry() : size_bytes(0) {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(path, bl);
+    ::encode(etag, bl);
+    ::encode(size_bytes, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+     DECODE_START(1, bl);
+     ::decode(path, bl);
+     ::decode(etag, bl);
+     ::decode(size_bytes, bl);
+     DECODE_FINISH(bl);
+  }
+
   void decode_json(JSONObj *obj);
 };
+WRITE_CLASS_ENCODER(rgw_slo_entry)
 
 struct RGWSLOInfo {
   vector<rgw_slo_entry> entries;
+  char *raw_data; /* in memory only */
+  int raw_data_len;
+
+  RGWSLOInfo() : raw_data(NULL), raw_data_len(0) {}
+  ~RGWSLOInfo() {
+    free(raw_data);
+  }
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(entries, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::iterator& bl) {
+     DECODE_START(1, bl);
+     ::decode(entries, bl);
+     DECODE_FINISH(bl);
+  }
 };
+WRITE_CLASS_ENCODER(RGWSLOInfo)
 
 class RGWPutObj : public RGWOp {
 
@@ -443,8 +482,6 @@ protected:
 
   RGWSLOInfo *slo_info;
 
-  MD5 *user_manifest_parts_hash;
-
   uint64_t olh_epoch;
   string version_id;
 
@@ -458,7 +495,6 @@ public:
                 dlo_manifest(NULL),
                 mtime(0),
                 slo_info(NULL),
-                user_manifest_parts_hash(NULL),
                 olh_epoch(0) {}
 
   ~RGWPutObj() {

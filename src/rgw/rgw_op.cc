@@ -1762,6 +1762,17 @@ static int get_system_versioning_params(req_state *s, uint64_t *olh_epoch, strin
   return 0;
 }
 
+static void complete_etag(MD5& hash, string *etag)
+{
+  char etag_buf[CEPH_CRYPTO_MD5_DIGESTSIZE];
+  char etag_buf_str[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 16];
+
+  hash.Final((byte *)etag_buf);
+  buf_to_hex((const unsigned char *)etag_buf, CEPH_CRYPTO_MD5_DIGESTSIZE, etag_buf_str);
+
+  *etag = etag_buf_str;
+}
+
 void RGWPutObj::execute()
 {
   RGWPutObjProcessor *processor = NULL;
@@ -1776,7 +1787,7 @@ void RGWPutObj::execute()
   map<string, string>::iterator iter;
   bool multipart;
 
-  bool need_calc_md5 = (dlo_manifest == NULL);
+  bool need_calc_md5 = (dlo_manifest == NULL) && (slo_info == NULL);
 
 
   perfcounter->inc(l_rgw_put);
@@ -1893,6 +1904,7 @@ void RGWPutObj::execute()
     goto done;
   }
   s->obj_size = ofs;
+
   perfcounter->inc(l_rgw_put_b, s->obj_size);
 
   ret = store->check_quota(s->bucket_owner.get_id(), s->bucket,
@@ -1922,12 +1934,8 @@ void RGWPutObj::execute()
     string manifest_obj_prefix;
     string manifest_bucket;
 
-    char etag_buf[CEPH_CRYPTO_MD5_DIGESTSIZE];
-    char etag_buf_str[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 16];
-
     manifest_bl.append(dlo_manifest, strlen(dlo_manifest) + 1);
     attrs[RGW_ATTR_USER_MANIFEST] = manifest_bl;
-    user_manifest_parts_hash = &hash;
     string prefix_str = dlo_manifest;
     int pos = prefix_str.find('/');
     if (pos < 0) {
@@ -1938,13 +1946,20 @@ void RGWPutObj::execute()
     manifest_bucket = prefix_str.substr(0, pos);
     manifest_obj_prefix = prefix_str.substr(pos + 1);
 
-    hash.Final((byte *)etag_buf);
-    buf_to_hex((const unsigned char *)etag_buf, CEPH_CRYPTO_MD5_DIGESTSIZE, etag_buf_str);
-
-    ldout(s->cct, 0) << __func__ << ": calculated md5 for user manifest: " << etag_buf_str << dendl;
-
-    etag = etag_buf_str;
+    complete_etag(hash, &etag);
+    ldout(s->cct, 10) << __func__ << ": calculated md5 for user manifest: " << etag << dendl;
   }
+
+  if (slo_info) {
+    bufferlist manifest_bl;
+    ::encode(*slo_info, manifest_bl);
+    attrs[RGW_ATTR_SLO_MANIFEST] = manifest_bl;
+
+    hash.Update((byte *)slo_info->raw_data, slo_info->raw_data_len);
+    complete_etag(hash, &etag);
+    ldout(s->cct, 10) << __func__ << ": calculated md5 for user manifest: " << etag << dendl;
+  }
+
   if (supplied_etag && etag.compare(supplied_etag) != 0) {
     ret = -ERR_UNPROCESSABLE_ENTITY;
     goto done;
