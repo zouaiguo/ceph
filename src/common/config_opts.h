@@ -1081,6 +1081,8 @@ OPTION(rgw_user_quota_sync_wait_time, OPT_INT, 3600 * 24) // min time between tw
 OPTION(rgw_multipart_min_part_size, OPT_INT, 5 * 1024 * 1024) // min size for each part (except for last one) in multipart upload
 OPTION(rgw_multipart_part_upload_limit, OPT_INT, 10000) // parts limit in multipart upload
 
+OPTION(rgw_max_slo_entries, OPT_INT, 1000) // default number of max entries in slo
+
 OPTION(rgw_olh_pending_timeout_sec, OPT_INT, 3600) // time until we retire a pending olh change
 
 OPTION(mutex_perf_counter, OPT_BOOL, false) // enable/disable mutex perf counter
