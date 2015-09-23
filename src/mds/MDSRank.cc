@@ -1668,7 +1668,6 @@ bool MDSRankDispatcher::handle_asok_command(
     
     if (!got_val) {
       ss << "no target epoch given";
-      delete f;
       return true;
     }
     
@@ -1724,13 +1723,11 @@ bool MDSRankDispatcher::handle_asok_command(
     string path;
     if(!cmd_getval(g_ceph_context, cmdmap, "path", path)) {
       ss << "malformed path";
-      delete f;
       return true;
     }
     int64_t rank;
     if(!cmd_getval(g_ceph_context, cmdmap, "rank", rank)) {
       ss << "malformed rank";
-      delete f;
       return true;
     }
     command_export_dir(f, path, (mds_rank_t)rank);
