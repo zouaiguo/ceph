@@ -67,17 +67,17 @@ struct SLO {
   }
 };
 
-struct ServiceRecord {
+struct request_param_t {
   double_t delta;
   double_t rho;
   double_t cost;
 
-  ServiceRecord(const ServiceRecord & old):
+  request_param_t(const request_param_t & old):
     delta(old.delta),
     rho(old.rho),
     cost(old.cost){
   }
-  ServiceRecord(double_t d, double_t r, double_t c) {
+  request_param_t(double_t d, double_t r, double_t c) {
     delta = d;
     rho = r;
     cost = c;
@@ -123,7 +123,7 @@ class PrioritizedQueue {
       return ret;
     }
 
-  typedef std::list<std::pair<ServiceRecord, T> > ListPairsDMColock;
+  typedef std::list<std::pair<request_param_t, T> > ListPairsDMColock;
 
   // this function can be merged with 'filter_list_pairs'
   // using template declaration in C++11 such as,
@@ -276,7 +276,7 @@ class PrioritizedQueue {
     tag_types_t selected_tag;
     K cl;
     SLO slo;
-    utime_t when_idled;
+    utime_t when_idled, when_assigned;
 
     // a local count of total IO done for this 'cl'
     double_t delta_local;
@@ -295,7 +295,7 @@ class PrioritizedQueue {
       r_spacing(0.0), p_spacing(0.0), l_spacing(0.0),
       active(true), selected_tag(T_NONE),
       cl(_cl), slo(_slo),
-      when_idled(ceph_clock_now(NULL)),
+      when_idled(ceph_clock_now(NULL)),when_assigned(ceph_clock_now(NULL)),
       delta_local(0.0),
       delta_remote(1.0),
       rho_local(0.0),
@@ -308,7 +308,7 @@ class PrioritizedQueue {
       r_spacing(old.r_spacing), p_spacing(old.p_spacing), l_spacing(old.l_spacing),
       active(old.active), selected_tag(old.selected_tag),
       cl(old.cl), slo(old.slo),
-      when_idled(old.when_idled),
+      when_idled(old.when_idled),when_assigned(old.when_assigned),
       delta_local(old.delta_local),
       delta_remote(old.delta_remote),
       rho_local(old.rho_local),
@@ -358,17 +358,17 @@ class PrioritizedQueue {
 	utime_t now = get_current_clock();
 	if (slo.reserve) {
 	  tag.r_spacing = 1.0 / slo.reserve;
+	  tag.r_deadline = now;
 	  reserve_r_throughput(slo.reserve);
 	}
 	if (slo.limit) {
 	  assert(slo.limit > slo.reserve);
 	  tag.l_spacing = 1.0 / slo.limit;
+	  tag.l_deadline = now;
 	}
 	if (slo.prop) {
 	  reserve_p_throughput(slo.prop);
-	  tag.p_deadline =
-	    min_tag_p.deadline ?
-	    min_tag_p.deadline : now;
+	  tag.p_deadline = now;
 	}
 	client_map[cl] = schedule.size(); //index of vector
 	schedule.push_back(tag);
@@ -376,48 +376,54 @@ class PrioritizedQueue {
       }
 
       // straight forward update-rule from paper
-      void update_current_tag(size_t cl_index, ServiceRecord record) {
+      void update_current_tag(size_t cl_index, request_param_t record) {
 	Tag *tag = &schedule[cl_index];
-
+	tag->when_assigned = get_current_clock();
 	if (tag->selected_tag == T_RESERVE) {
 	  if (tag->slo.reserve)
 	    tag->r_deadline.set_from_double(
-		tag->r_deadline + MAX(1.0 , record.rho - tag->rho_local) * tag->r_spacing);
+	      tag->r_deadline + MAX(1.0 , record.rho - tag->rho_local) * tag->r_spacing);
 	}
 	if (tag->slo.prop) {
 	  tag->p_deadline.set_from_double(
-	      tag->p_deadline + MAX(1.0 , record.delta - tag->delta_local) * tag->p_spacing);
+	    tag->p_deadline + MAX(1.0 , record.delta - tag->delta_local) * tag->p_spacing);
 	}
 	if (tag->slo.limit) {
 	  tag->l_deadline.set_from_double(
-	      tag->l_deadline + MAX(1.0 , record.delta - tag->delta_local) * tag->l_spacing);
+	    tag->l_deadline + MAX(1.0 , record.delta - tag->delta_local) * tag->l_spacing);
 	}
       }
 
       // a separate function to update only idle tags for (i) better performance, and
       // (ii) possible future improvement to give idle-credit to handle client's burstiness
-      void update_idle_tag(size_t cl_index, ServiceRecord record) {
-	utime_t now = get_current_clock();
+      void update_idle_tag(size_t cl_index, request_param_t record) {
 	Tag *tag = &schedule[cl_index];
 	tag->active = true;
+	utime_t idle_time = get_current_clock();
+	idle_time -= tag->when_idled;
+	double_t spacing, offset;
+	// debug
+	tag->when_assigned = get_current_clock();
 
-	if(tag->selected_tag == T_RESERVE || tag->selected_tag == T_NONE){
-	  if (tag->slo.reserve){
-	    tag->r_deadline.set_from_double(
-		MAX(tag->r_deadline +
-		    MAX(1.0 , record.rho - tag->rho_local) * tag->r_spacing , now));
+	if (tag->slo.reserve){
+	  spacing = MAX(1.0 , record.rho - tag->rho_local) * tag->r_spacing;
+	  offset = (spacing < idle_time) ? fmod(idle_time, spacing) : 0.0;
+	  if(tag->selected_tag == T_RESERVE){
+	    tag->r_deadline.set_from_double( tag->r_deadline + ((offset) ? idle_time : 0.0 + spacing - offset));
+	  }else{
+	    tag->r_deadline.set_from_double( tag->r_deadline + ((offset) ? idle_time : 0.0));
 	  }
 	}
-	if (tag->slo.prop)
-	  tag->p_deadline.set_from_double(
-	      MAX(tag->p_deadline +
-		  MAX(1.0 , record.delta - tag->delta_local) * tag->p_spacing , now));
-
-	if (tag->slo.limit)
-	  tag->l_deadline.set_from_double(
-	      MAX(tag->l_deadline +
-		  MAX(1.0 , record.delta - tag->delta_local) * tag->l_spacing , now));
-
+	if (tag->slo.prop){
+	  spacing = MAX(1.0 , record.delta - tag->delta_local) * tag->p_spacing;
+	  offset = (spacing < idle_time) ? fmod(idle_time, spacing) : 0.0;
+	  tag->p_deadline.set_from_double(tag->p_deadline + ((offset) ? idle_time : 0.0 + spacing - offset));
+	}
+	if (tag->slo.limit){
+	  spacing = MAX(1.0 , record.delta - tag->delta_local) * tag->l_spacing;
+	  offset = (spacing < idle_time) ? fmod(idle_time, spacing) : 0.0;
+	  tag->l_deadline.set_from_double(tag->l_deadline + ((offset) ? idle_time : 0.0 + spacing - offset));
+	}
       }
 
       // the heart of dm_clock algorithm. it sweeps through the schedule vector
@@ -636,6 +642,7 @@ class PrioritizedQueue {
 
 	Tag *tag = &schedule[selected_tag_index];
 	// update local delta & rho
+	tag->when_assigned = get_current_clock();
 	tag->delta_local++;
 	if(tag->selected_tag == T_RESERVE)
 	  tag->rho_local++;
@@ -648,7 +655,7 @@ class PrioritizedQueue {
 	  tag->active = false;
 	  tag->when_idled = get_current_clock();
 	}else{
-	  ServiceRecord record = requests[tag->cl].front().first;
+	  request_param_t record = requests[tag->cl].front().first;
 	  update_current_tag(selected_tag_index, record);
 	}
 	// management routine
@@ -656,7 +663,7 @@ class PrioritizedQueue {
 	return std::make_pair(ret, *tag);
       }
 
-      void enqueue(K cl, SLO slo, ServiceRecord record, T item, bool in_front = false) {
+      void enqueue(K cl, SLO slo, request_param_t record, T item, bool in_front = false) {
 	bool was_empty = false;
 	bool new_cl = (requests.find(cl) == requests.end());
 	if (new_cl) {
@@ -672,7 +679,7 @@ class PrioritizedQueue {
 	}
 	size++;
 
-	if (was_empty || new_cl) {
+	if (was_empty) { // || new_cl
 	  update_idle_tag(client_map[cl], record);
 	}
       }
@@ -704,7 +711,7 @@ class PrioritizedQueue {
 	    f->dump_int("rho" , schedule[i].rho_local);
 	    f->dump_float("ratio", schedule[i].r_to_p_ratio);
 	    std::ostringstream data;
-	    data << "cur_time "<< ceph_clock_now(NULL)
+	    data << "cur_time "<<  ceph_clock_now(NULL)
 		<<" || deadline ["<< schedule[i].r_deadline << " (+"<< schedule[i].r_spacing <<"), "
 		<< schedule[i].p_deadline << " (+"<< schedule[i].p_spacing <<"), "
 		<< schedule[i].l_deadline << " (+"<< schedule[i].l_spacing <<")"<< " ]"
@@ -904,12 +911,12 @@ class PrioritizedQueue {
 
   void enqueue_dmClock(K cl, unsigned slo_reserve, unsigned slo_prop,
       unsigned slo_limit, int64_t delta, int64_t rho, unsigned cost,  T item) {
-    dm_queue.enqueue(cl, SLO(slo_reserve, slo_prop, slo_limit), ServiceRecord((double_t)delta, (double_t)rho, cost), item);
+    dm_queue.enqueue(cl, SLO(slo_reserve, slo_prop, slo_limit), request_param_t((double_t)delta, (double_t)rho, cost), item);
   }
 
   void enqueue_front_dmClock(K cl, unsigned slo_reserve, unsigned slo_prop,
       unsigned slo_limit, int64_t delta, int64_t rho, unsigned cost, T item) {
-    dm_queue.enqueue(cl, SLO(slo_reserve, slo_prop, slo_limit), ServiceRecord((double_t)delta, (double_t)rho, cost), item, true);
+    dm_queue.enqueue(cl, SLO(slo_reserve, slo_prop, slo_limit), request_param_t((double_t)delta, (double_t)rho, cost), item, true);
   }
 
   void enqueue(K cl, unsigned priority, unsigned cost, T item) {

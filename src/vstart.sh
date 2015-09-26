@@ -244,7 +244,7 @@ else
         debug ms = 1'
     COSDDEBUG='
         debug ms = 1
-        debug osd = 1
+        debug osd = 0
         debug objecter = 1
         debug monc = 0
         debug journal = 0
@@ -390,25 +390,25 @@ fi
         keyring = $keyring_fn
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
-	client slo iops reserve = 10	
-	client slo iops prop = 10
-	client slo iops limit = 12
+	client slo iops reserve = 0	
+	client slo iops prop = 1
+	client slo iops limit = 0
 
 
 [client.foo1]
         keyring = $keyring_fn
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
-	client slo iops reserve = 10	
-	client slo iops prop = 10
+	client slo iops reserve = 1	
+	client slo iops prop = 1
 	client slo iops limit = 0
 
 [client.foo2]
         keyring = $keyring_fn
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
-	client slo iops reserve = 10
-	client slo iops prop = 20
+	client slo iops reserve = 1
+	client slo iops prop = 2
 	client slo iops limit = 0
 
 [client.foo3]
@@ -416,8 +416,8 @@ fi
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
 	client slo iops reserve = 0
-	client slo iops prop = 30
-	client slo iops limit = 15
+	client slo iops prop = 3
+	client slo iops limit = 2
 
 [mds]
 $DAEMONOPTS
@@ -437,7 +437,7 @@ $DAEMONOPTS
         osd class dir = $OBJCLASS_PATH
         osd scrub load threshold = 5.0
         osd debug op order = true
-	osd max throughput = 20
+	osd max throughput = 10
 	osd op num threads per shard = 1 
 	osd op num shards = 1
         filestore wbthrottle xfs ios start flusher = 10
