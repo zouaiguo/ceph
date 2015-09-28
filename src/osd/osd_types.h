@@ -1487,6 +1487,14 @@ struct object_stat_sum_t {
   void decode(bufferlist::iterator& bl);
   static void generate_test_instances(list<object_stat_sum_t*>& o);
 };
+inline ostream& operator<<(ostream& out, const object_stat_sum_t& stat) {
+  out << "object_stat_sum_t(";
+  JSONFormatter f;
+  stat.dump(&f);
+  f.flush(out);
+  out << ")";
+  return out;
+}
 WRITE_CLASS_ENCODER(object_stat_sum_t)
 
 bool operator==(const object_stat_sum_t& l, const object_stat_sum_t& r);
@@ -1748,8 +1756,6 @@ WRITE_CLASS_ENCODER(pg_hit_set_info_t)
  */
 struct pg_hit_set_history_t {
   eversion_t current_last_update;  ///< last version inserted into current set
-  utime_t current_last_stamp;      ///< timestamp of last insert
-  pg_hit_set_info_t current_info;  ///< metadata about the current set
   list<pg_hit_set_info_t> history; ///< archived sets, sorted oldest -> newest
 
   void encode(bufferlist &bl) const;
