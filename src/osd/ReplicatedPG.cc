@@ -6364,7 +6364,12 @@ void ReplicatedPG::finish_ctx(OpContext *ctx, int log_op_type, bool maintain_ssc
 
 void ReplicatedPG::apply_ctx_stats(OpContext *ctx, bool scrub_ok)
 {
+  dout(20) << __func__ << ": adding delta_stats: "
+	   << ctx->delta_stats << dendl;
+
   info.stats.stats.add(ctx->delta_stats);
+  dout(20) << __func__ << ": new stats: "
+	   << info.stats.stats.sum << dendl;
 
   const hobject_t& soid = ctx->obs->oi.soid;
   for (set<pg_shard_t>::iterator i = backfill_targets.begin();
