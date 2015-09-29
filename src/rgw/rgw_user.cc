@@ -2042,9 +2042,8 @@ int RGWUser::execute_modify(RGWUserAdminOpState& op_state, std::string *err_msg)
         return -EEXIST;
       }
     }
-    user_info.user_email = op_email;
   }
-
+  user_info.user_email = op_email;
 
   // update the remaining user info
   if (!display_name.empty())
