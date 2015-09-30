@@ -780,6 +780,9 @@ int main(int argc, const char **argv)
   delete msgr;
   delete client_throttler;
   delete daemon_throttler;
+
+  derr << "g_ceph_context pre-put refcount is "
+       << g_ceph_context->nref.read() << dendl;
   g_ceph_context->put();
 
   // cd on exit, so that gmon.out (if any) goes into a separate directory for each node.

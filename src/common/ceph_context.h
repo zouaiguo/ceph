@@ -58,20 +58,15 @@ public:
   // ref count!
 private:
   ~CephContext();
+public:
   atomic_t nref;
 public:
   class AssociatedSingletonObject {
    public:
     virtual ~AssociatedSingletonObject() {}
   };
-  CephContext *get() {
-    nref.inc();
-    return this;
-  }
-  void put() {
-    if (nref.dec() == 0)
-      delete this;
-  }
+  CephContext *get();
+  void put();
 
   md_config_t *_conf;
   ceph::log::Log *_log;

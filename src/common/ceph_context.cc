@@ -40,6 +40,22 @@
 
 using ceph::HeartbeatMap;
 
+CephContext *CephContext::get()
+{
+  lgeneric_dout(this, 0) << "cct(" << this << ").get " << nref.read()
+			<< " -> " << (nref.read() + 1) << dendl;
+  nref.inc();
+  return this;
+}
+
+void CephContext::put()
+{
+  lgeneric_dout(this, 0) << "cct(" << this << ").put " << nref.read()
+			<< " -> " << (nref.read() - 1) << dendl;
+  if (nref.dec() == 0)
+    delete this;
+}
+
 namespace {
 
 class LockdepObs : public md_config_obs_t {
@@ -509,6 +525,8 @@ CephContext::~CephContext()
   _conf->remove_observer(_lockdep_obs);
   delete _lockdep_obs;
   _lockdep_obs = NULL;
+
+  lgeneric_dout(this, 1) << "cct shutdown" << dendl;
 
   _log->stop();
   delete _log;
