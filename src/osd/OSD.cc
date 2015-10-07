@@ -8293,7 +8293,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb ) 
 
   //lgeneric_subdout(osd->cct, osd, 30) << "dequeue status: ";
   if(service_tag >= 0 ){
-    lgeneric_subdout(osd->cct, osd, 0) << "dequeue status: ";
+    lgeneric_subdout(osd->cct, osd, 1) << "dequeue status: ";
     Formatter *f = Formatter::create("json-pretty"); //"json"
     f->open_object_section("q");
     dump(f);
@@ -8355,7 +8355,7 @@ void OSD::ShardedOpWQ::_enqueue(pair<PGRef, PGQueueable> item) {
   sdata->sdata_op_ordering_lock.Unlock();
   //dm_clock log
   if (priority < CEPH_MSG_PRIO_LOW){
-    lgeneric_subdout(osd->cct, osd, 0) << "enqueue status: ";
+    lgeneric_subdout(osd->cct, osd, 1) << "enqueue status: ";
     Formatter *f = Formatter::create("json-pretty"); //"json"
     f->open_object_section("q");
     dump(f);
