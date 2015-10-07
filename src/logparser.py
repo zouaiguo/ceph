@@ -157,13 +157,14 @@ class Tag:
         self.slo_r = 0;
         self.slo_p = 0;
         self.slo_l = 0;
+        self.tag_str = ''
         
     def to_str(self, dt):        
         dif_r = (self.r - dt).total_seconds()*1000 if self.r else '.';
         dif_p = (self.p - dt).total_seconds()*1000 if self.p else '.';
         dif_l = (self.l - dt).total_seconds()*1000 if self.l else '.';    
 
-        return "{}--{}({})--{}({})--{}({})".format(self.active, dif_r, self.rs, dif_p, self.ps, dif_l, self.ls)     
+        return "{} {}--{}({})--{}({})--{}({})".format(self.tag_str, self.active, dif_r, self.rs, dif_p, self.ps, dif_l, self.ls)     
        
 
 class Timestamp:
@@ -198,7 +199,7 @@ def parse_osd_log(filename):
     clients = {}; #clients[client_id] = [tag1, tag2, ...]
     tag = None;
     timestamp = None; 
-    
+    rho  = 0;
     json_blocks = get_json_blocks(filename);
     for block in json_blocks:
         val = json.loads(block);                
@@ -220,6 +221,16 @@ def parse_osd_log(filename):
             tag.client = t['num'];
             t = _t;
             tag.active = 1 if t['active?'] else 0;
+            if( t['rho'] > rho):
+                tag.tag_str='R'
+            else:
+                tag.tag_str='P'
+            
+            if qtype == "enqueue":
+                tag.tag_str='X'
+                
+            rho = t['rho'];
+                            
             line = t['deadline'].replace('cur_time ',"");
             parts = line.split("||");
             # curr_time                        

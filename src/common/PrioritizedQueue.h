@@ -382,15 +382,15 @@ class PrioritizedQueue {
 	if (tag->selected_tag == T_RESERVE) {
 	  if (tag->slo.reserve)
 	    tag->r_deadline.set_from_double(
-	      tag->r_deadline + MAX(1.0 , record.rho - tag->rho_local) * tag->r_spacing);
+	      MAX( tag->r_deadline + tag->r_spacing, tag->when_assigned));
 	}
 	if (tag->slo.prop) {
 	  tag->p_deadline.set_from_double(
-	    tag->p_deadline + MAX(1.0 , record.delta - tag->delta_local) * tag->p_spacing);
+	    MAX(tag->p_deadline + tag->p_spacing, tag->when_assigned));
 	}
 	if (tag->slo.limit) {
 	  tag->l_deadline.set_from_double(
-	    tag->l_deadline + MAX(1.0 , record.delta - tag->delta_local) * tag->l_spacing);
+	    MAX( tag->l_deadline + tag->l_spacing, tag->when_assigned));
 	}
       }
 
@@ -399,30 +399,21 @@ class PrioritizedQueue {
       void update_idle_tag(size_t cl_index, request_param_t record) {
 	Tag *tag = &schedule[cl_index];
 	tag->active = true;
-	utime_t idle_time = get_current_clock();
-	idle_time -= tag->when_idled;
-	double_t spacing, offset;
-	// debug
 	tag->when_assigned = get_current_clock();
 
-	if (tag->slo.reserve){
-	  spacing = MAX(1.0 , record.rho - tag->rho_local) * tag->r_spacing;
-	  offset = (spacing < idle_time) ? fmod(idle_time, spacing) : 0.0;
-	  if(tag->selected_tag == T_RESERVE){
-	    tag->r_deadline.set_from_double( tag->r_deadline + ((offset) ? idle_time : 0.0 + spacing - offset));
-	  }else{
-	    tag->r_deadline.set_from_double( tag->r_deadline + ((offset) ? idle_time : 0.0));
+	if(tag->selected_tag == T_RESERVE){
+	  if (tag->slo.reserve){
+	    tag->r_deadline.set_from_double(
+	      MAX( tag->r_deadline + tag->r_spacing, tag->when_assigned));
 	  }
 	}
 	if (tag->slo.prop){
-	  spacing = MAX(1.0 , record.delta - tag->delta_local) * tag->p_spacing;
-	  offset = (spacing < idle_time) ? fmod(idle_time, spacing) : 0.0;
-	  tag->p_deadline.set_from_double(tag->p_deadline + ((offset) ? idle_time : 0.0 + spacing - offset));
+	  tag->p_deadline.set_from_double(
+	    MAX(tag->p_deadline + tag->p_spacing, tag->when_assigned));
 	}
 	if (tag->slo.limit){
-	  spacing = MAX(1.0 , record.delta - tag->delta_local) * tag->l_spacing;
-	  offset = (spacing < idle_time) ? fmod(idle_time, spacing) : 0.0;
-	  tag->l_deadline.set_from_double(tag->l_deadline + ((offset) ? idle_time : 0.0 + spacing - offset));
+	  tag->l_deadline.set_from_double(
+	    MAX( tag->l_deadline + tag->l_spacing, tag->when_assigned));
 	}
       }
 

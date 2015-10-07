@@ -243,8 +243,8 @@ else
         debug auth = 20
         debug ms = 1'
     COSDDEBUG='
-        debug ms = 1
-        debug osd = 0
+        debug ms = 0
+        debug osd = 1
         debug objecter = 1
         debug monc = 0
         debug journal = 0
@@ -390,9 +390,9 @@ fi
         keyring = $keyring_fn
         log file = $CEPH_OUT_DIR/\$name.\$pid.log
         admin socket = $CEPH_OUT_DIR/\$name.\$pid.asok
-	client slo iops reserve = 0	
-	client slo iops prop = 1
-	client slo iops limit = 0
+	client slo iops reserve = 2	
+	client slo iops prop = 3
+	client slo iops limit = 5
 
 
 [client.foo1]
