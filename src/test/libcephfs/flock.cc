@@ -422,7 +422,6 @@ static void process_ConcurrentLocking(str_ConcurrentLocking& s) {
 
   CLEANUP_CEPH();
 
-  s.sem_destroy();
   exit(EXIT_SUCCESS);
 }
 
