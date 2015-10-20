@@ -208,6 +208,7 @@ int main(int argc, const char **argv)
   bool mkfs = false;
   bool compact = false;
   bool force_sync = false;
+  bool force_reset_features = false;
   bool yes_really = false;
   std::string osdmapfn, inject_monmap, extract_monmap;
 
@@ -275,6 +276,8 @@ int main(int argc, const char **argv)
       compact = true;
     } else if (ceph_argparse_flag(args, i, "--force-sync", (char*)NULL)) {
       force_sync = true;
+    } else if (ceph_argparse_flag(args, i, "--force-reset-features", (char*)NULL)) {
+      force_reset_features = true;
     } else if (ceph_argparse_flag(args, i, "--yes-i-really-mean-it", (char*)NULL)) {
       yes_really = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--osdmap", (char*)NULL)) {
@@ -294,6 +297,11 @@ int main(int argc, const char **argv)
 
   if (force_sync && !yes_really) {
     cerr << "are you SURE you want to force a sync?  this will erase local data and may\n"
+	 << "break your mon cluster.  pass --yes-i-really-mean-it if you do." << std::endl;
+    exit(1);
+  }
+  if (force_reset_features && !yes_really) {
+    cerr << "are you SURE you want to reset features?  this could cause problems and\n"
 	 << "break your mon cluster.  pass --yes-i-really-mean-it if you do." << std::endl;
     exit(1);
   }
@@ -527,6 +535,11 @@ int main(int argc, const char **argv)
   if (strcmp(magic.c_str(), CEPH_MON_ONDISK_MAGIC)) {
     derr << "mon fs magic '" << magic << "' != current '" << CEPH_MON_ONDISK_MAGIC << "'" << dendl;
     prefork.exit(1);
+  }
+
+  if (force_reset_features) {
+    derr << "resetting compat features" << dendl;
+    Monitor::reset_features(store);
   }
 
   err = Monitor::check_features(store);

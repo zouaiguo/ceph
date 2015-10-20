@@ -863,6 +863,7 @@ public:
   ~Monitor();
 
   static int check_features(MonitorDBStore *store);
+  static int reset_features(MonitorDBStore *store);
 
   // config observer
   virtual const char** get_tracked_conf_keys() const;

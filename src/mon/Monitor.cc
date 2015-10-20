@@ -395,6 +395,17 @@ int Monitor::check_features(MonitorDBStore *store)
   return 0;
 }
 
+int Monitor::reset_features(MonitorDBStore *store)
+{
+  CompatSet supported = get_supported_features();
+  bufferlist bl;
+  supported.encode(bl);
+  MonitorDBStore::TransactionRef t(new MonitorDBStore::Transaction);
+  t->put(MONITOR_NAME, COMPAT_SET_LOC, bl);
+  store->apply_transaction(t);
+  return 0;
+}
+
 void Monitor::read_features_off_disk(MonitorDBStore *store, CompatSet *features)
 {
   bufferlist featuresbl;
