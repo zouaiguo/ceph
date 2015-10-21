@@ -3731,7 +3731,8 @@ int NewStore::_do_write(TransContext *txc,
 	}
 	continue;
       }
-      ++fp;
+      if (fp->first + fp->second.length <= offset)
+	++fp;
     }
 
     if (fp == o->onode.data_map.end() ||
