@@ -7135,7 +7135,8 @@ int Client::_release_fh(Fh *f)
       // release clean pages too, if we dont want RDCACHE
       if (in->cap_refs[CEPH_CAP_FILE_CACHE] == 0 &&
 	  !(in->caps_wanted() & CEPH_CAP_FILE_CACHE) &&
-	  !objectcacher->set_is_empty(&in->oset))
+	  !objectcacher->set_is_empty(&in->oset) &&
+	  !_cct->conf->client_preserve_pagecache)
 	_invalidate_inode_cache(in);
       else
 	check_caps(in, false);
