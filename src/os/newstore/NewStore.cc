@@ -1306,6 +1306,7 @@ int NewStore::_do_read(
 	       << " use " << x_off << "~" << x_len
 	       << " fid " << cur_fid << " offset " << x_off + fp->second.offset
 	       << dendl;
+      assert(fd >= 0);
       r = ::lseek64(fd, x_off, SEEK_SET);
       if (r < 0) {
 	r = -errno;
