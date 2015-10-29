@@ -26,7 +26,7 @@ struct BackTrace;
 
 struct FailedAssertion {
   BackTrace *backtrace;
-  FailedAssertion(BackTrace *bt) : backtrace(bt) {}
+  explicit FailedAssertion(BackTrace *bt) : backtrace(bt) {}
 };
 
 #endif
