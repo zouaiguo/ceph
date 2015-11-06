@@ -2800,6 +2800,8 @@ void RGWPutACLs::execute()
   obj = rgw_obj(s->bucket, s->object);
   map<string, bufferlist> attrs;
 
+  store->set_atomic(s->obj_ctx, obj);
+
   if (!s->object.empty()) {
     ret = get_obj_attrs(store, s, obj, attrs);
     if (ret < 0)
@@ -2808,7 +2810,6 @@ void RGWPutACLs::execute()
   
   attrs[RGW_ATTR_ACL] = bl;
 
-  store->set_atomic(s->obj_ctx, obj);
   if (!s->object.empty()) {
     ret = store->set_attrs(s->obj_ctx, obj, attrs, NULL, ptracker);
   } else {
