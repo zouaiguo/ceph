@@ -3932,6 +3932,7 @@ void CInode::validate_disk_state(CInode::validated_data *results,
       } else if (fin) {
         fin->complete(get_rval());
       }
+      delete this;
     }
   };
 
