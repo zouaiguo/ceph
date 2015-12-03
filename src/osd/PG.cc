@@ -1287,6 +1287,7 @@ bool PG::choose_acting(pg_shard_t &auth_log_shard_id)
     return false;
   }
 
+  assert(all_info.count(up_primary));
   if ((up.size() &&
       !all_info.find(up_primary)->second.is_incomplete() &&
       all_info.find(up_primary)->second.last_update >=
