@@ -144,3 +144,7 @@ target_link_libraries(cls_lua
 add_library(cls_lua_client
     lua/cls_lua_client.cc
 )
+
+install(FILES
+    hello/cls_hellolua.lua
+    DESTINATION ${pkgdatadir}/ceph/rados-classes)

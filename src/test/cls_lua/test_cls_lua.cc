@@ -1131,3 +1131,17 @@ TEST_F(ClsLua, MsgPackMod) {
 
   ASSERT_EQ(0, clslua_exec(test_script, NULL, "msgpack_mod"));
 }
+
+TEST_F(ClsLua, FileLoad) {
+  ASSERT_EQ(0, ioctx.create(oid, false));
+
+  bufferlist inbl, outbl;
+  std::string input("something something");
+  inbl.append(input);
+
+  int ret = ioctx.exec(oid, "hellolua", "say_hello", inbl, outbl);
+  ASSERT_EQ(ret, 0);
+
+  std::string out(outbl.c_str(), outbl.length());
+  ASSERT_STREQ(out.c_str(), "Hello, something something! (from Lua)");
+}

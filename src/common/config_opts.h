@@ -720,6 +720,7 @@ OPTION(osd_deep_scrub_update_digest_min_age, OPT_INT, 2*60*60)   // objects must
 OPTION(osd_scan_list_ping_tp_interval, OPT_U64, 100)
 OPTION(osd_class_dir, OPT_STR, CEPH_LIBDIR "/rados-classes") // where rados plugins are stored
 OPTION(osd_lua_class_enable, OPT_BOOL, false) // allow Lua object classes
+OPTION(osd_lua_class_dir, OPT_STR, CEPH_DATADIR "/ceph/rados-classes") // where rados lua plugins are stored
 OPTION(osd_open_classes_on_start, OPT_BOOL, true)
 OPTION(osd_check_for_log_corruption, OPT_BOOL, false)
 OPTION(osd_use_stale_snap, OPT_BOOL, false)
