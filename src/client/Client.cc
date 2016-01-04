@@ -2294,7 +2294,7 @@ void Client::_handle_full_flag(int64_t pool)
   {
     Inode *inode = i->second;
     if (inode->oset.dirty_or_tx
-        && (pool == -1 || inode->layout.fl_pg_pool == pool)) {
+        && (pool == -1 || inode->layout.pool_id == pool)) {
       ldout(cct, 4) << __func__ << ": FULL: inode 0x" << std::hex << i->first << std::dec
         << " has dirty objects, purging and setting ENOSPC" << dendl;
       objectcacher->purge_set(&inode->oset);
@@ -3554,7 +3554,7 @@ bool Client::_flush(Inode *in, Context *onfinish)
     return true;
   }
 
-  if (objecter->osdmap_pool_full(in->layout.fl_pg_pool)) {
+  if (objecter->osdmap_pool_full(in->layout.pool_id)) {
     ldout(cct, 1) << __func__ << ": FULL, purging for ENOSPC" << dendl;
     objectcacher->purge_set(&in->oset);
     if (onfinish) {
@@ -6489,7 +6489,7 @@ int Client::fill_stat(Inode *in, struct stat *st, frag_info_t *dirstat, nest_inf
     st->st_size = in->size;
     st->st_blocks = (in->size + 511) >> 9;
   }
-  st->st_blksize = MAX(in->layout.fl_stripe_unit, 4096);
+  st->st_blksize = MAX(in->layout.stripe_unit, 4096);
 
   if (dirstat)
     *dirstat = in->dirstat;
@@ -7555,7 +7555,7 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
   }
 
   const md_config_t *conf = cct->_conf;
-  loff_t p = in->layout.fl_stripe_count * in->layout.fl_object_size;
+  loff_t p = in->layout.stripe_count * in->layout.object_size;
   f->readahead.set_trigger_requests(1);
   f->readahead.set_min_readahead_size(conf->client_readahead_min);
   uint64_t max_readahead = Readahead::NO_LIMIT;
@@ -7568,7 +7568,7 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
   f->readahead.set_max_readahead_size(max_readahead);
   vector<uint64_t> alignments;
   alignments.push_back(p);
-  alignments.push_back(in->layout.fl_stripe_unit);
+  alignments.push_back(in->layout.stripe_unit);
   f->readahead.set_alignments(alignments);
 
   return f;
@@ -8228,7 +8228,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
   //ldout(cct, 7) << "write fh " << fh << " size " << size << " offset " << offset << dendl;
   Inode *in = f->inode.get();
 
-  if (objecter->osdmap_pool_full(in->layout.fl_pg_pool)) {
+  if (objecter->osdmap_pool_full(in->layout.pool_id)) {
     return -ENOSPC;
   }
 
@@ -9981,49 +9981,45 @@ size_t Client::_vxattrcb_quota_max_files(Inode *in, char *val, size_t size)
 
 bool Client::_vxattrcb_layout_exists(Inode *in)
 {
-  char *p = (char *)&in->layout;
-  for (size_t s = 0; s < sizeof(in->layout); s++, p++)
-    if (*p)
-      return true;
-  return false;
+  return in->layout != file_layout_t();
 }
 size_t Client::_vxattrcb_layout(Inode *in, char *val, size_t size)
 {
   int r = snprintf(val, size,
       "stripe_unit=%lld stripe_count=%lld object_size=%lld pool=",
-      (unsigned long long)in->layout.fl_stripe_unit,
-      (unsigned long long)in->layout.fl_stripe_count,
-      (unsigned long long)in->layout.fl_object_size);
+      (unsigned long long)in->layout.stripe_unit,
+      (unsigned long long)in->layout.stripe_count,
+      (unsigned long long)in->layout.object_size);
   const OSDMap *osdmap = objecter->get_osdmap_read();
-  if (osdmap->have_pg_pool(in->layout.fl_pg_pool))
+  if (osdmap->have_pg_pool(in->layout.pool_id))
     r += snprintf(val + r, size - r, "%s",
-	osdmap->get_pool_name(in->layout.fl_pg_pool).c_str());
+	osdmap->get_pool_name(in->layout.pool_id).c_str());
   else
     r += snprintf(val + r, size - r, "%lld",
-	(unsigned long long)in->layout.fl_pg_pool);
+	(unsigned long long)in->layout.pool_id);
   objecter->put_osdmap_read();
   return r;
 }
 size_t Client::_vxattrcb_layout_stripe_unit(Inode *in, char *val, size_t size)
 {
-  return snprintf(val, size, "%lld", (unsigned long long)in->layout.fl_stripe_unit);
+  return snprintf(val, size, "%lld", (unsigned long long)in->layout.stripe_unit);
 }
 size_t Client::_vxattrcb_layout_stripe_count(Inode *in, char *val, size_t size)
 {
-  return snprintf(val, size, "%lld", (unsigned long long)in->layout.fl_stripe_count);
+  return snprintf(val, size, "%lld", (unsigned long long)in->layout.stripe_count);
 }
 size_t Client::_vxattrcb_layout_object_size(Inode *in, char *val, size_t size)
 {
-  return snprintf(val, size, "%lld", (unsigned long long)in->layout.fl_object_size);
+  return snprintf(val, size, "%lld", (unsigned long long)in->layout.object_size);
 }
 size_t Client::_vxattrcb_layout_pool(Inode *in, char *val, size_t size)
 {
   size_t r;
   const OSDMap *osdmap = objecter->get_osdmap_read();
-  if (osdmap->have_pg_pool(in->layout.fl_pg_pool))
-    r = snprintf(val, size, "%s", osdmap->get_pool_name(in->layout.fl_pg_pool).c_str());
+  if (osdmap->have_pg_pool(in->layout.pool_id))
+    r = snprintf(val, size, "%s", osdmap->get_pool_name(in->layout.pool_id).c_str());
   else
-    r = snprintf(val, size, "%lld", (unsigned long long)in->layout.fl_pg_pool);
+    r = snprintf(val, size, "%lld", (unsigned long long)in->layout.pool_id);
   objecter->put_osdmap_read();
   return r;
 }
@@ -10898,7 +10894,7 @@ int Client::ll_osdaddr(int osd, uint32_t *addr)
 uint32_t Client::ll_stripe_unit(Inode *in)
 {
   Mutex::Locker lock(client_lock);
-  return in->layout.fl_stripe_unit;
+  return in->layout.stripe_unit;
 }
 
 uint64_t Client::ll_snap_seq(Inode *in)
@@ -10907,14 +10903,14 @@ uint64_t Client::ll_snap_seq(Inode *in)
   return in->snaprealm->seq;
 }
 
-int Client::ll_file_layout(Inode *in, ceph_file_layout *layout)
+int Client::ll_file_layout(Inode *in, file_layout_t *layout)
 {
   Mutex::Locker lock(client_lock);
   *layout = in->layout;
   return 0;
 }
 
-int Client::ll_file_layout(Fh *fh, ceph_file_layout *layout)
+int Client::ll_file_layout(Fh *fh, file_layout_t *layout)
 {
   return ll_file_layout(fh->inode.get(), layout);
 }
@@ -10927,13 +10923,13 @@ int Client::ll_file_layout(Fh *fh, ceph_file_layout *layout)
    tractable and works for demonstration purposes. */
 
 int Client::ll_get_stripe_osd(Inode *in, uint64_t blockno,
-			      ceph_file_layout* layout)
+			      file_layout_t* layout)
 {
   Mutex::Locker lock(client_lock);
   inodeno_t ino = ll_get_inodeno(in);
-  uint32_t object_size = layout->fl_object_size;
-  uint32_t su = layout->fl_stripe_unit;
-  uint32_t stripe_count = layout->fl_stripe_count;
+  uint32_t object_size = layout->object_size;
+  uint32_t su = layout->stripe_unit;
+  uint32_t stripe_count = layout->stripe_count;
   uint64_t stripes_per_object = object_size / su;
 
   uint64_t stripeno = blockno / stripe_count;    // which horizontal stripe        (Y)
@@ -10943,7 +10939,7 @@ int Client::ll_get_stripe_osd(Inode *in, uint64_t blockno,
 
   object_t oid = file_object_t(ino, objectno);
   const OSDMap *osdmap = objecter->get_osdmap_read();
-  ceph_object_layout olayout = osdmap->file_to_object_layout(oid, *layout, "");
+  ceph_object_layout olayout = osdmap->file_to_object_layout(oid, *layout);
   objecter->put_osdmap_read();
 
   pg_t pg = (pg_t)olayout.ol_pgid;
@@ -10958,9 +10954,9 @@ int Client::ll_get_stripe_osd(Inode *in, uint64_t blockno,
 uint64_t Client::ll_get_internal_offset(Inode *in, uint64_t blockno)
 {
   Mutex::Locker lock(client_lock);
-  ceph_file_layout *layout=&(in->layout);
-  uint32_t object_size = layout->fl_object_size;
-  uint32_t su = layout->fl_stripe_unit;
+  file_layout_t *layout=&(in->layout);
+  uint32_t object_size = layout->object_size;
+  uint32_t su = layout->stripe_unit;
   uint64_t stripes_per_object = object_size / su;
 
   return (blockno % stripes_per_object) * su;
@@ -11158,7 +11154,7 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
 			  char *buf,
 			  uint64_t offset,
 			  uint64_t length,
-			  ceph_file_layout* layout)
+			  file_layout_t* layout)
 {
   Mutex::Locker lock(client_lock);
   Mutex flock("Client::ll_read_block flock");
@@ -11171,7 +11167,7 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
   bufferlist bl;
 
   objecter->read(oid,
-		 object_locator_t(layout->fl_pg_pool),
+		 object_locator_t(layout->pool_id),
 		 offset,
 		 length,
 		 vino.snapid,
@@ -11195,7 +11191,7 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
 
 int Client::ll_write_block(Inode *in, uint64_t blockid,
 			   char* buf, uint64_t offset,
-			   uint64_t length, ceph_file_layout* layout,
+			   uint64_t length, file_layout_t* layout,
 			   uint64_t snapseq, uint32_t sync)
 {
   Mutex flock("Client::ll_write_block flock");
@@ -11240,7 +11236,7 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
   client_lock.Lock();
 
   objecter->write(oid,
-		  object_locator_t(layout->fl_pg_pool),
+		  object_locator_t(layout->pool_id),
 		  offset,
 		  length,
 		  fakesnap,
@@ -11342,8 +11338,8 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
 
   Inode *in = fh->inode.get();
 
-  if (objecter->osdmap_pool_full(in->layout.fl_pg_pool)
-      && !(mode & FALLOC_FL_PUNCH_HOLE)) {
+  if (objecter->osdmap_pool_full(in->layout.pool_id) &&
+      !(mode & FALLOC_FL_PUNCH_HOLE)) {
     return -ENOSPC;
   }
 
@@ -11573,7 +11569,7 @@ void Client::ll_interrupt(void *d)
 
 // expose file layouts
 
-int Client::describe_layout(const char *relpath, ceph_file_layout *lp)
+int Client::describe_layout(const char *relpath, file_layout_t *lp)
 {
   Mutex::Locker lock(client_lock);
 
@@ -11589,7 +11585,7 @@ int Client::describe_layout(const char *relpath, ceph_file_layout *lp)
   return 0;
 }
 
-int Client::fdescribe_layout(int fd, ceph_file_layout *lp)
+int Client::fdescribe_layout(int fd, file_layout_t *lp)
 {
   Mutex::Locker lock(client_lock);
 
@@ -11676,7 +11672,7 @@ int Client::get_file_extent_osds(int fd, loff_t off, loff_t *len, vector<int>& o
    * remainder.
    */
   if (len) {
-    uint64_t su = in->layout.fl_stripe_unit;
+    uint64_t su = in->layout.stripe_unit;
     *len = su - (off % su);
   }
 
@@ -12010,7 +12006,7 @@ int Client::check_pool_perm(Inode *in, int need)
   if (!cct->_conf->client_check_pool_perm)
     return 0;
 
-  int64_t pool = in->layout.fl_pg_pool;
+  int64_t pool = in->layout.pool_id;
   int have = 0;
   while (true) {
     std::map<int64_t, int>::iterator it = pool_perms.find(pool);
