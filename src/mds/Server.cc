@@ -3998,6 +3998,8 @@ int Server::parse_layout_vxattr(string name, string value, const OSDMap *osdmap,
 	}
 	layout->pool_id = pool;
       }
+    } else if (name == "layout.pool_namespace") {
+      layout->pool_ns = value;
     } else {
       dout(10) << " unknown layout vxattr " << name << dendl;
       return -EINVAL;
