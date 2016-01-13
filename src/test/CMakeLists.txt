@@ -338,6 +338,9 @@ add_dependencies(check osd_bench)
 add_test(NAME osd_scrub_repair COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-scrub-repair.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check osd_scrub_repair)
 
+add_test(NAME test_erasure_code COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/erasure-code/test-erasure-code.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check test_erasure_code)
+
 set_property(TEST 
   test_helpers 
   osd_config
@@ -346,15 +349,13 @@ set_property(TEST
   rados_striper
   osd_bench
   osd_scrub_repair
+  test_erasure_code
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
   CEPH_LIB=${CMAKE_BINARY_DIR}/lib
   LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR}/lib
   PYTHONPATH=$PYTHONPATH:${CMAKE_SOURCE_DIR}/src/pybind)
-
-add_test(NAME test_erasure_code COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/erasure-code/test-erasure-code.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check test_erasure_code)
 
 add_test(NAME test_erasure_eio COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/erasure-code/test-erasure-eio.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check test_erasure_eio)
