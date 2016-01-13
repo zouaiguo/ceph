@@ -332,21 +332,22 @@ add_dependencies(check osd_crush)
 add_test(NAME rados_striper COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/libradosstriper/rados-striper.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check rados_striper)
 
+add_test(NAME osd_bench COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-bench.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check osd_bench)
+
 set_property(TEST 
   test_helpers 
   osd_config
   osd_copy_from
   osd_crush
   rados_striper
+  osd_bench
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
   CEPH_LIB=${CMAKE_BINARY_DIR}/lib
   LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR}/lib
   PYTHONPATH=$PYTHONPATH:${CMAKE_SOURCE_DIR}/src/pybind)
-
-add_test(NAME osd_bench COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-bench.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check osd_bench)
 
 add_test(NAME test_erasure_code COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/erasure-code/test-erasure-code.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check test_erasure_code)
