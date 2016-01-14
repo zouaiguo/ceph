@@ -356,6 +356,9 @@ add_dependencies(check cephtool_test_osd)
 add_test(NAME cephtool_test_mds COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/cephtool-test-mds.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check cephtool_test_mds)
 
+add_test(NAME osd_mark_down COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-markdown.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check osd-markdown)
+
 set_property(TEST 
   test_helpers 
   osd_config
@@ -370,6 +373,7 @@ set_property(TEST
   cephtool_test_mon
   cephtool_test_osd
   cephtool_test_mds
+  osd_mark_down
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
@@ -378,11 +382,14 @@ set_property(TEST
   LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib
   PYTHONPATH=${CMAKE_SOURCE_DIR}/src/pybind)
 
-add_test(NAME ceph_objectstore_tool_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/ceph_objectstore_tool.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME ceph_objectstore_tool_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/ceph_objectstore_tool.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check ceph_objectstore_tool_py)
 
-add_test(NAME osd_mark_down COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-markdown.sh)
-add_dependencies(check osd-markdown)
+add_test(NAME test_ceph_argparse_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_argparse.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check test_ceph_argparse_py)
+
+add_test(NAME test_ceph_daemon COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_daemon.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+add_dependencies(check test_ceph_daemon)
 
 add_test(NAME ceph_disk COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/ceph-disk.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check ceph_disk)
@@ -437,13 +444,6 @@ add_dependencies(check mkfs)
 
 add_test(NAME misc COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/misc.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check misc)
-
-add_test(NAME test_ceph_daemon COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_daemon.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src/test/pybind)
-add_dependencies(check test_ceph_daemon)
-
-set(CTEST_ENVIROMENT "PYTHONPATH=$PYTHONPATH:${CMAKE_SOURCE_DIR}/src/pybind")
-add_test(NAME test_ceph_argparse_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_argparse.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/src/test)
-add_dependencies(check test_ceph_argparse_py)
 
 add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/unittest_bufferlist.sh)
 add_dependencies(check unittest_bufferlist_shell)
