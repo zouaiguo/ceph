@@ -15,24 +15,16 @@ if [ -n "$VSTART_DEST" ]; then
   CEPH_OUT_DIR=$VSTART_DEST/out
 fi
 
-if [ -e CMakeCache.txt ]; then
+if [ -e $CEPH_BUILD_DIR/CMakeCache.txt ]; then
   # Out of tree build, learn source location from CMakeCache.txt
   SRC_ROOT=`grep Ceph_SOURCE_DIR CMakeCache.txt | cut -d "=" -f 2`
-  [ -z "$PYBIND" ] && PYBIND=$SRC_ROOT/src/pybind
-  [ -z "$CEPH_ADM" ] && CEPH_ADM=./ceph
-  [ -z "$INIT_CEPH" ] && INIT_CEPH=./init-ceph
-  [ -z "$CEPH_BIN" ] && CEPH_BIN=src
-  [ -z "$CEPH_LIB" ] && CEPH_LIB=src
-  [ -z "$OBJCLASS_PATH" ] && OBJCLASS_PATH=src/cls
-
-  # Gather symlinks to EC plugins in one dir, because with CMake they
-  # are built into multiple locations
-  mkdir -p ec_plugins
-  for file in ./src/erasure-code/*/libec_*.so*;
-  do
-    ln -sf ../${file} ec_plugins/`basename $file`
-  done
-  [ -z "$EC_PATH" ] && EC_PATH=./ec_plugins
+  [ -z "$PYBIND" ] && PYBIND=$CEPH_ROOT/src/pybind
+  [ -z "$CEPH_BIN" ] && CEPH_BIN=bin
+  [ -z "$CEPH_ADM" ] && CEPH_ADM=$CEPH_BIN/ceph
+  [ -z "$INIT_CEPH" ] && INIT_CEPH=$CEPH_BIN/init-ceph
+  [ -z "$CEPH_LIB" ] && CEPH_LIB=lib
+  [ -z "$OBJCLASS_PATH" ] && OBJCLASS_PATH=$CEPH_LIB
+  [ -z "$EC_PATH" ] && EC_PATH=$CEPH_LIB
 fi
 
 if [ -z "$CEPH_BUILD_ROOT" ]; then

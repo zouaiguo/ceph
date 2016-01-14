@@ -344,6 +344,9 @@ add_dependencies(check test_erasure_code)
 add_test(NAME test_erasure_eio COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/erasure-code/test-erasure-eio.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check test_erasure_eio)
 
+add_test(NAME cephtool_test_rados COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/cephtool-test-rados.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check cephtool_test_rados)
+
 set_property(TEST 
   test_helpers 
   osd_config
@@ -354,15 +357,14 @@ set_property(TEST
   osd_scrub_repair
   test_erasure_code
   test_erasure_eio
+  cephtool_test_rados
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
   CEPH_LIB=${CMAKE_BINARY_DIR}/lib
-  LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CMAKE_BINARY_DIR}/lib
-  PYTHONPATH=$PYTHONPATH:${CMAKE_SOURCE_DIR}/src/pybind)
-
-add_test(NAME cephtool_test_rados COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/cephtool-test-rados.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check cephtool_test_rados)
+  CEPH_BUILD_DIR=${CMAKE_BINARY_DIR}
+  LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib
+  PYTHONPATH=${CMAKE_SOURCE_DIR}/src/pybind)
 
 add_test(NAME cephtool_test_mon COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/cephtool-test-mon.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check cephtool_test_mon)
