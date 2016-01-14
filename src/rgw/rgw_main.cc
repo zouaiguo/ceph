@@ -580,6 +580,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
     goto done;
   }
   req->op = op;
+  s->op_type = op->get_type();
 
   req->log(s, "authorizing");
   ret = handler->authorize();
