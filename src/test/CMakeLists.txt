@@ -362,6 +362,9 @@ add_dependencies(check osd-markdown)
 add_test(NAME ceph_disk COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/ceph-disk.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check ceph_disk)
 
+add_test(NAME misc COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/misc.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check misc)
+
 set_property(TEST 
   test_helpers 
   osd_config
@@ -378,6 +381,7 @@ set_property(TEST
   cephtool_test_mds
   osd_mark_down
   ceph_disk
+  misc
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
@@ -385,6 +389,39 @@ set_property(TEST
   CEPH_BUILD_DIR=${CMAKE_BINARY_DIR}
   LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib
   PYTHONPATH=${CMAKE_SOURCE_DIR}/src/pybind)
+
+add_test(NAME mkfs COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/mkfs.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check mkfs)
+
+add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/unittest_bufferlist.sh)
+add_dependencies(check unittest_bufferlist_shell)
+
+add_test(NAME osd_reactivate COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-reactivate.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check osd_reactivate)
+
+add_test(NAME run_tox COMMAND bash ${CMAKE_SOURCE_DIR}/src/ceph-detect-init/run-tox.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check run_tox)
+
+add_test(NAME check_generated COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/encoding/check-generated.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check check_generated)
+
+add_test(NAME run_rbd_unit_tests COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/run-rbd-unit-tests.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check run_rbd_unit_tests)
+
+add_test(NAME osd_pool_create COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/osd-pool-create.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check osd_pool_create)
+
+add_test(NAME mon_handle_forward COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/mon-handle-forward.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check mon_handle_forward)
+
+add_test(NAME osd_erasure_code_profile COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/osd-erasure-code-profile.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check osd_erasure_code_profile)
+
+add_test(NAME readable COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/encoding/readable.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check readable)
+
+add_test(NAME encode_decode_non_regression COMMAND bash ${CMAKE_SOURCE_DIR}/qa/workunits/erasure-code/encode-decode-non-regression.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check encode_decode_non_regression)
 
 add_test(NAME ceph_objectstore_tool_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/ceph_objectstore_tool.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check ceph_objectstore_tool_py)
@@ -439,42 +476,6 @@ target_link_libraries(unittest_chain_xattr
   )
 set_target_properties(unittest_chain_xattr PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
-
-add_test(NAME mkfs COMMAND bash	${CMAKE_SOURCE_DIR}/src/test/mon/mkfs.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check mkfs)
-
-add_test(NAME misc COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/misc.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check misc)
-
-add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/unittest_bufferlist.sh)
-add_dependencies(check unittest_bufferlist_shell)
-
-add_test(NAME osd_reactivate COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-reactivate.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check osd_reactivate)
-
-add_test(NAME run_tox COMMAND bash ${CMAKE_SOURCE_DIR}/src/ceph-detect-init/run-tox.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check run_tox)
-
-add_test(NAME check_generated COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/encoding/check-generated.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check check_generated)
-
-add_test(NAME run_rbd_unit_tests COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/run-rbd-unit-tests.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check run_rbd_unit_tests)
-
-add_test(NAME osd_pool_create COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/osd-pool-create.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check osd_pool_create)
-
-add_test(NAME mon_handle_forward COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/mon-handle-forward.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check mon_handle_forward)
-
-add_test(NAME osd_erasure_code_profile COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/osd-erasure-code-profile.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check osd_erasure_code_profile)
-
-add_test(NAME readable COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/encoding/readable.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check readable)
-
-add_test(NAME encode_decode_non_regression COMMAND bash ${CMAKE_SOURCE_DIR}/qa/workunits/erasure-code/encode-decode-non-regression.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check encode_decode_non_regression)
 
 # unittest_encoding
 add_executable(unittest_encoding EXCLUDE_FROM_ALL
