@@ -368,6 +368,9 @@ add_dependencies(check misc)
 add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/unittest_bufferlist.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check unittest_bufferlist_shell)
 
+add_test(NAME osd_reactivate COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-reactivate.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check osd_reactivate)
+
 set_property(TEST 
   test_helpers 
   osd_config
@@ -386,6 +389,7 @@ set_property(TEST
   ceph_disk
   misc
   unittest_bufferlist_shell
+  osd_reactivate
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
@@ -396,9 +400,6 @@ set_property(TEST
 
 add_test(NAME mkfs COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/mkfs.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check mkfs)
-
-add_test(NAME osd_reactivate COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-reactivate.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check osd_reactivate)
 
 add_test(NAME run_tox COMMAND bash ${CMAKE_SOURCE_DIR}/src/ceph-detect-init/run-tox.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check run_tox)
