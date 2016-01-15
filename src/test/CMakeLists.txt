@@ -359,6 +359,9 @@ add_dependencies(check cephtool_test_mds)
 add_test(NAME osd_mark_down COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-markdown.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check osd-markdown)
 
+add_test(NAME ceph_disk COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/ceph-disk.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check ceph_disk)
+
 set_property(TEST 
   test_helpers 
   osd_config
@@ -374,6 +377,7 @@ set_property(TEST
   cephtool_test_osd
   cephtool_test_mds
   osd_mark_down
+  ceph_disk
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
@@ -390,9 +394,6 @@ add_dependencies(check test_ceph_argparse_py)
 
 add_test(NAME test_ceph_daemon COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_daemon.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 add_dependencies(check test_ceph_daemon)
-
-add_test(NAME ceph_disk COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/ceph-disk.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check ceph_disk)
 
 # unittest_admin_socket
 add_executable(unittest_admin_socket EXCLUDE_FROM_ALL
