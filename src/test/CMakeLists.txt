@@ -365,6 +365,9 @@ add_dependencies(check ceph_disk)
 add_test(NAME misc COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/misc.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check misc)
 
+add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/unittest_bufferlist.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_dependencies(check unittest_bufferlist_shell)
+
 set_property(TEST 
   test_helpers 
   osd_config
@@ -382,6 +385,7 @@ set_property(TEST
   osd_mark_down
   ceph_disk
   misc
+  unittest_bufferlist_shell
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
@@ -392,9 +396,6 @@ set_property(TEST
 
 add_test(NAME mkfs COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/mkfs.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check mkfs)
-
-add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/unittest_bufferlist.sh)
-add_dependencies(check unittest_bufferlist_shell)
 
 add_test(NAME osd_reactivate COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-reactivate.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check osd_reactivate)
@@ -864,7 +865,6 @@ add_executable(unittest_bufferlist EXCLUDE_FROM_ALL
   bufferlist.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-add_test(unittest_bufferlist unittest_bufferlist)
 add_dependencies(check unittest_bufferlist)
 target_link_libraries(unittest_bufferlist global ${CMAKE_DL_LIBS}
   ${ALLOC_LIBS} ${UNITTEST_LIBS})
