@@ -389,6 +389,9 @@ add_dependencies(check mon_handle_forward)
 add_test(NAME osd_erasure_code_profile COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/osd-erasure-code-profile.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check osd_erasure_code_profile)
 
+add_test(NAME encode_decode_non_regression COMMAND bash ${CMAKE_SOURCE_DIR}/qa/workunits/erasure-code/encode-decode-non-regression.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(check encode_decode_non_regression)
+
 set_property(TEST 
   test_helpers 
   osd_config
@@ -414,6 +417,7 @@ set_property(TEST
   osd_pool_create
   mon_handle_forward
   osd_erasure_code_profile
+  encode_decode_non_regression
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
@@ -427,9 +431,6 @@ add_dependencies(check mkfs)
 
 add_test(NAME run_rbd_unit_tests COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/run-rbd-unit-tests.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(check run_rbd_unit_tests)
-
-add_test(NAME encode_decode_non_regression COMMAND bash ${CMAKE_SOURCE_DIR}/qa/workunits/erasure-code/encode-decode-non-regression.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check encode_decode_non_regression)
 
 add_test(NAME ceph_objectstore_tool_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/ceph_objectstore_tool.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check ceph_objectstore_tool_py)
