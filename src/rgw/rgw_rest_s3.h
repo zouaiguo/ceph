@@ -250,6 +250,7 @@ public:
   RGWCompleteMultipart_ObjStore_S3() {}
   ~RGWCompleteMultipart_ObjStore_S3() {}
 
+  int get_params();
   void send_response();
 };
 
@@ -284,6 +285,7 @@ public:
   RGWDeleteMultiObj_ObjStore_S3() {}
   ~RGWDeleteMultiObj_ObjStore_S3() {}
 
+  int get_params();
   void send_status();
   void begin_response();
   void send_partial_response(rgw_obj_key& key, bool delete_marker,

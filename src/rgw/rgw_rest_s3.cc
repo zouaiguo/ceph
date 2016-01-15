@@ -471,6 +471,13 @@ int RGWSetBucketVersioning_ObjStore_S3::get_params()
     return r;
   }
 
+  if (s->aws4_auth_needs_complete) {
+    int ret_auth = do_aws4_auth_completion();
+    if (ret_auth < 0) {
+      return ret_auth;
+    }
+  }
+
   RGWSetBucketVersioningParser parser;
 
   if (!parser.init()) {
@@ -602,6 +609,13 @@ int RGWCreateBucket_ObjStore_S3::get_params()
   if ((ret < 0) && (ret != -ERR_LENGTH_REQUIRED))
     return ret;
 
+  if (s->aws4_auth_needs_complete) {
+    int ret_auth = do_aws4_auth_completion();
+    if (ret_auth < 0) {
+      return ret_auth;
+    }
+  }
+  
   bufferptr in_ptr(data, len);
   in_data.append(in_ptr);
 
@@ -709,8 +723,9 @@ int RGWPutObj_ObjStore_S3::get_data(bufferlist& bl)
     s->aws4_auth_needs_complete = false;
   if ((ret == 0) && s->aws4_auth_needs_complete) {
     int ret_auth = do_aws4_auth_completion();
-    if (ret_auth)
+    if (ret_auth < 0) {
       return ret_auth;
+    }
   }
   return ret;
 }
@@ -1571,8 +1586,9 @@ int RGWPutACLs_ObjStore_S3::get_params()
     s->aws4_auth_needs_complete = false;
   if (s->aws4_auth_needs_complete) {
     int ret_auth = do_aws4_auth_completion();
-    if (ret_auth)
+    if (ret_auth < 0) {
       return ret_auth;
+    }
   }
   return ret;
 }
@@ -1645,13 +1661,20 @@ int RGWPutCORS_ObjStore_S3::get_params()
        goto done_err;
     }
     int read_len;
-    r = s->cio->read(data, cl, &read_len);
+    r = s->cio->read(data, cl, &read_len, s->aws4_auth_needs_complete);
     len = read_len;
     if (r < 0)
       goto done_err;
     data[len] = '\0';
   } else {
     len = 0;
+  }
+
+  if (s->aws4_auth_needs_complete) {
+    int ret_auth = do_aws4_auth_completion();
+    if (ret_auth < 0) {
+      return ret_auth;
+    }
   }
 
   if (!parser.init()) {
@@ -1754,6 +1777,22 @@ void RGWInitMultipart_ObjStore_S3::send_response()
     s->formatter->close_section();
     rgw_flush_formatter_and_reset(s, s->formatter);
   }
+}
+
+int RGWCompleteMultipart_ObjStore_S3::get_params()
+{
+  int ret = RGWCompleteMultipart_ObjStore::get_params();
+  if (ret < 0) {
+    return ret;
+  }
+
+  if (s->aws4_auth_needs_complete) {
+    int ret_auth = do_aws4_auth_completion();
+    if (ret_auth < 0) {
+      return ret_auth;
+    }
+  }
+  return 0;
 }
 
 void RGWCompleteMultipart_ObjStore_S3::send_response()
@@ -1900,6 +1939,22 @@ void RGWListBucketMultiparts_ObjStore_S3::send_response()
   }
   s->formatter->close_section();
   rgw_flush_formatter_and_reset(s, s->formatter);
+}
+
+int RGWDeleteMultiObj_ObjStore_S3::get_params()
+{
+  int ret = RGWDeleteMultiObj_ObjStore::get_params();
+  if (ret < 0) {
+    return ret;
+  }
+
+  if (s->aws4_auth_needs_complete) {
+    int ret_auth = do_aws4_auth_completion();
+    if (ret_auth < 0) {
+      return ret_auth;
+    }
+  }
+  return 0;
 }
 
 void RGWDeleteMultiObj_ObjStore_S3::send_status()
@@ -2796,13 +2851,14 @@ int RGW_Auth_S3::authorize_v4(RGWRados *store, struct req_state *s)
 
     switch (s->op_type)
     {
+      case RGW_OP_CREATE_BUCKET:
       case RGW_OP_PUT_OBJ:
       case RGW_OP_PUT_ACLS:
-      /* ops requiring aws4 completion but not implemented yet */
-      //case RGW_OP_PUT_CORS:
-      //case RGW_OP_COMPLETE_MULTIPART:
-      //case RGW_OP_SET_BUCKET_VERSIONING:
-      //case RGW_OP_DELETE_MULTI_OBJ:
+      case RGW_OP_PUT_CORS:
+      case RGW_OP_COMPLETE_MULTIPART:
+      case RGW_OP_SET_BUCKET_VERSIONING:
+      case RGW_OP_DELETE_MULTI_OBJ:
+      case RGW_OP_ADMIN_SET_METADATA:
         break;
       default:
         dout(10) << "ERROR: AWS4 completion for this operation NOT IMPLEMENTED" << dendl;
