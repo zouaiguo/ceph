@@ -1188,6 +1188,48 @@ if(${WITH_RADOSGW})
   install(TARGETS radosgw-object-expirer DESTINATION bin)
 endif(${WITH_RADOSGW})
 
+set(liblua_srcs
+    lua/lua-5.3.2/src/lapi.c
+    lua/lua-5.3.2/src/lauxlib.c
+    lua/lua-5.3.2/src/lbaselib.c
+    lua/lua-5.3.2/src/lbitlib.c
+    lua/lua-5.3.2/src/lcode.c
+    lua/lua-5.3.2/src/lcorolib.c
+    lua/lua-5.3.2/src/lctype.c
+    lua/lua-5.3.2/src/ldblib.c
+    lua/lua-5.3.2/src/ldebug.c
+    lua/lua-5.3.2/src/ldo.c
+    lua/lua-5.3.2/src/ldump.c
+    lua/lua-5.3.2/src/lfunc.c
+    lua/lua-5.3.2/src/lgc.c
+    lua/lua-5.3.2/src/linit.c
+    lua/lua-5.3.2/src/liolib.c
+    lua/lua-5.3.2/src/llex.c
+    lua/lua-5.3.2/src/lmathlib.c
+    lua/lua-5.3.2/src/lmem.c
+    lua/lua-5.3.2/src/loadlib.c
+    lua/lua-5.3.2/src/lobject.c
+    lua/lua-5.3.2/src/lopcodes.c
+    lua/lua-5.3.2/src/loslib.c
+    lua/lua-5.3.2/src/lparser.c
+    lua/lua-5.3.2/src/lstate.c
+    lua/lua-5.3.2/src/lstring.c
+    lua/lua-5.3.2/src/lstrlib.c
+    lua/lua-5.3.2/src/ltable.c
+    lua/lua-5.3.2/src/ltablib.c
+    lua/lua-5.3.2/src/ltm.c
+    lua/lua-5.3.2/src/lundump.c
+    lua/lua-5.3.2/src/lutf8lib.c
+    lua/lua-5.3.2/src/lvm.c
+    lua/lua-5.3.2/src/lzio.c
+)
+
+add_library(cephlua SHARED ${liblua_srcs})
+
+target_include_directories(cephlua
+    PUBLIC lua/lua-5.3.2/src/
+)
+
 # Everything you need to spin up a cluster with vstart.sh
 add_custom_target(vstart DEPENDS
     ceph-osd

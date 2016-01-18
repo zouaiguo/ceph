@@ -225,6 +225,9 @@ LIBKRBD = libkrbd.la
 LIBCEPHFS = libcephfs.la
 LIBERASURE_CODE = liberasure_code.la
 
+LIBLUA = liblua.la
+LIBLUA_CPPFLAGS = -I${top_srcdir}/src/lua/lua-5.3.2/src
+
 if WITH_LIBAIO
 LIBOS += -laio
 endif # WITH_LIBAIO
