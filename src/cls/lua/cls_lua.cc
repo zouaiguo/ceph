@@ -758,6 +758,9 @@ static void clslua_setup_env(lua_State *L)
 
   luaL_requiref(L, "struct", luaopen_struct, 1);
   lua_pop(L, 1);
+
+  luaL_requiref(L, "cmsgpack", luaopen_cmsgpack, 1);
+  lua_pop(L, 1);
 }
 
 /*

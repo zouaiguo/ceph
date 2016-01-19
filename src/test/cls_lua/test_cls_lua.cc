@@ -527,6 +527,14 @@ function struct_mod(input, output)
 end
 
 objclass.register(struct_mod)
+
+function msgpack_mod(input, output)
+  local data = cmsgpack.pack({"foo", "bar", "baz"})
+  objclass.log(0, "msgpack.pack", data)
+  objclass.log(0, "msgpack.unpack", cmsgpack.unpack(data))
+end
+
+objclass.register(msgpack_mod)
 )luascript";
 
 /*
@@ -1116,4 +1124,10 @@ TEST_F(ClsLua, StructMod) {
   ASSERT_EQ(0, ioctx.create(oid, false));
 
   ASSERT_EQ(0, clslua_exec(test_script, NULL, "struct_mod"));
+}
+
+TEST_F(ClsLua, MsgPackMod) {
+  ASSERT_EQ(0, ioctx.create(oid, false));
+
+  ASSERT_EQ(0, clslua_exec(test_script, NULL, "msgpack_mod"));
 }

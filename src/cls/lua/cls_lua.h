@@ -8,6 +8,7 @@
 
 extern "C" {
   int luaopen_struct(lua_State *L);
+  int luaopen_cmsgpack(lua_State *L);
 }
 
 int luaopen_bufferlist(lua_State *L);
