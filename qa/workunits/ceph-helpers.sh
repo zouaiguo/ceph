@@ -340,30 +340,30 @@ function test_run_mon() {
 
     run_mon $dir a --mon-initial-members=a || return 1
     # rbd has not been deleted / created, hence it has pool id 0
-    ceph osd dump | grep "pool 0 'rbd'" || return 1
+    $CEPH_BIN/ceph osd dump | grep "pool 0 'rbd'" || return 1
     kill_daemons $dir || return 1
 
     run_mon $dir a || return 1
     # rbd has been deleted / created, hence it does not have pool id 0
-    ! ceph osd dump | grep "pool 0 'rbd'" || return 1
-    local size=$(CEPH_ARGS='' ceph --format=json daemon $dir/ceph-mon.a.asok \
+    ! $CEPH_BIN/ceph osd dump | grep "pool 0 'rbd'" || return 1
+    local size=$(CEPH_ARGS='' $CEPH_BIN/ceph --format=json daemon $dir/ceph-mon.a.asok \
         config get osd_pool_default_size)
     test "$size" = '{"osd_pool_default_size":"3"}' || return 1
 
-    ! CEPH_ARGS='' ceph status || return 1
-    CEPH_ARGS='' ceph --conf $dir/ceph.conf status || return 1
+    ! CEPH_ARGS='' $CEPH_BIN/ceph status || return 1
+    CEPH_ARGS='' $CEPH_BIN/ceph --conf $dir/ceph.conf status || return 1
 
     kill_daemons $dir || return 1
 
     run_mon $dir a --osd_pool_default_size=1 || return 1
-    local size=$(CEPH_ARGS='' ceph --format=json daemon $dir/ceph-mon.a.asok \
+    local size=$(CEPH_ARGS='' $CEPH_BIN/ceph --format=json daemon $dir/ceph-mon.a.asok \
         config get osd_pool_default_size)
     test "$size" = '{"osd_pool_default_size":"1"}' || return 1
     kill_daemons $dir || return 1
 
     CEPH_ARGS="$CEPH_ARGS --osd_pool_default_size=2" \
         run_mon $dir a || return 1
-    local size=$(CEPH_ARGS='' ceph --format=json daemon $dir/ceph-mon.a.asok \
+    local size=$(CEPH_ARGS='' $CEPH_BIN/ceph --format=json daemon $dir/ceph-mon.a.asok \
         config get osd_pool_default_size)
     test "$size" = '{"osd_pool_default_size":"2"}' || return 1
     kill_daemons $dir || return 1
@@ -431,17 +431,17 @@ function test_run_osd() {
     run_mon $dir a || return 1
 
     run_osd $dir 0 || return 1
-    local backfills=$(CEPH_ARGS='' ceph --format=json daemon $dir//ceph-osd.0.asok \
+    local backfills=$(CEPH_ARGS='' $CEPH_BIN/ceph --format=json daemon $dir//ceph-osd.0.asok \
         config get osd_max_backfills)
     echo "$backfills" | grep --quiet 'osd_max_backfills' || return 1
 
     run_osd $dir 1 --osd-max-backfills 20 || return 1
-    local backfills=$(CEPH_ARGS='' ceph --format=json daemon $dir//ceph-osd.1.asok \
+    local backfills=$(CEPH_ARGS='' $CEPH_BIN/ceph --format=json daemon $dir//ceph-osd.1.asok \
         config get osd_max_backfills)
     test "$backfills" = '{"osd_max_backfills":"20"}' || return 1
 
     CEPH_ARGS="$CEPH_ARGS --osd-max-backfills 30" run_osd $dir 2 || return 1
-    local backfills=$(CEPH_ARGS='' ceph --format=json daemon $dir//ceph-osd.2.asok \
+    local backfills=$(CEPH_ARGS='' $CEPH_BIN/ceph --format=json daemon $dir//ceph-osd.2.asok \
         config get osd_max_backfills)
     test "$backfills" = '{"osd_max_backfills":"30"}' || return 1
 
@@ -466,10 +466,10 @@ function destroy_osd() {
     local id=$2
 
     kill_daemons $dir TERM osd.$id || return 1
-    ceph osd out osd.$id || return 1
-    ceph auth del osd.$id || return 1
-    ceph osd crush remove osd.$id || return 1
-    ceph osd rm $id || return 1
+    $CEPH_BIN/ceph osd out osd.$id || return 1
+    $CEPH_BIN/ceph auth del osd.$id || return 1
+    $CEPH_BIN/ceph osd crush remove osd.$id || return 1
+    $CEPH_BIN/ceph osd rm $id || return 1
     rm -fr $dir/$id
 }
 
@@ -480,7 +480,7 @@ function test_destroy_osd() {
     run_mon $dir a || return 1
     run_osd $dir 0 || return 1
     destroy_osd $dir 0 || return 1
-    ! ceph osd dump | grep "osd.$id " || return 1
+    ! $CEPH_BIN/ceph osd dump | grep "osd.$id " || return 1
     teardown $dir || return 1
 }
 
@@ -570,14 +570,14 @@ function test_activate_osd() {
     run_mon $dir a || return 1
 
     run_osd $dir 0 || return 1
-    local backfills=$(CEPH_ARGS='' ceph --format=json daemon $dir//ceph-osd.0.asok \
+    local backfills=$(CEPH_ARGS='' $CEPH_BIN/ceph --format=json daemon $dir//ceph-osd.0.asok \
         config get osd_max_backfills)
     echo "$backfills" | grep --quiet 'osd_max_backfills' || return 1
 
     kill_daemons $dir TERM osd || return 1
 
     activate_osd $dir 0 --osd-max-backfills 20 || return 1
-    local backfills=$(CEPH_ARGS='' ceph --format=json daemon $dir//ceph-osd.0.asok \
+    local backfills=$(CEPH_ARGS='' $CEPH_BIN/ceph --format=json daemon $dir//ceph-osd.0.asok \
         config get osd_max_backfills)
     test "$backfills" = '{"osd_max_backfills":"20"}' || return 1
 
@@ -601,7 +601,7 @@ function wait_for_osd() {
     status=1
     for ((i=0; i < $TIMEOUT; i++)); do
         echo $i
-        if ! ceph osd dump | grep "osd.$id $state"; then
+        if ! $CEPH_BIN/ceph osd dump | grep "osd.$id $state"; then
             sleep 1
         else
             status=0
@@ -638,7 +638,7 @@ function get_osds() {
     local poolname=$1
     local objectname=$2
 
-    local osds=$(ceph --format xml osd map $poolname $objectname 2>/dev/null | \
+    local osds=$($CEPH_BIN/ceph --format xml osd map $poolname $objectname 2>/dev/null | \
         $XMLSTARLET sel -t -m "//acting/osd" -v . -o ' ')
     # get rid of the trailing space
     echo $osds
@@ -671,7 +671,7 @@ function get_pg() {
     local poolname=$1
     local objectname=$2
 
-    ceph --format xml osd map $poolname $objectname 2>/dev/null | \
+    $CEPH_BIN/ceph --format xml osd map $poolname $objectname 2>/dev/null | \
         $XMLSTARLET sel -t -m "//pgid" -v . -n
 }
 
@@ -704,7 +704,7 @@ function get_config() {
     local config=$3
 
     CEPH_ARGS='' \
-        ceph --format xml daemon $dir/ceph-$daemon.$id.asok \
+        $CEPH_BIN/ceph --format xml daemon $dir/ceph-$daemon.$id.asok \
         config get $config 2> /dev/null | \
         $XMLSTARLET sel -t -m "//$config" -v . -n
 }
@@ -740,7 +740,7 @@ function set_config() {
     local value=$4
 
     CEPH_ARGS='' \
-        ceph --format xml daemon $dir/ceph-$daemon.$id.asok \
+        $CEPH_BIN/ceph --format xml daemon $dir/ceph-$daemon.$id.asok \
         config set $config $value 2> /dev/null | \
         $XMLSTARLET sel -Q -t -m "//success" -v .
 }
@@ -773,7 +773,7 @@ function get_primary() {
     local poolname=$1
     local objectname=$2
 
-    ceph --format xml osd map $poolname $objectname 2>/dev/null | \
+    $CEPH_BIN/ceph --format xml osd map $poolname $objectname 2>/dev/null | \
         $XMLSTARLET sel -t -m "//acting_primary" -v . -n
 }
 
@@ -805,7 +805,7 @@ function get_not_primary() {
     local objectname=$2
 
     local primary=$(get_primary $poolname $objectname)
-    ceph --format xml osd map $poolname $objectname 2>/dev/null | \
+    $CEPH_BIN/ceph --format xml osd map $poolname $objectname 2>/dev/null | \
         $XMLSTARLET sel -t -m "//acting/osd[not(.='$primary')]" -v . -n | \
         head -1
 }
@@ -849,7 +849,7 @@ function objectstore_tool() {
     local osd_data=$dir/$id
 
     kill_daemons $dir TERM osd.$id >&2 < /dev/null || return 1
-    ceph-objectstore-tool \
+    $CEPH_BIN/ceph-objectstore-tool \
         --data-path $osd_data \
         --journal-path $osd_data/journal \
         "$@" || return 1
@@ -865,7 +865,7 @@ function test_objectstore_tool() {
     local osd=0
     run_osd $dir $osd || return 1
     wait_for_clean || return 1
-    rados --pool rbd put GROUP /etc/group || return 1
+    $CEPH_BIN/rados --pool rbd put GROUP /etc/group || return 1
     objectstore_tool $dir $osd GROUP get-bytes | \
         diff - /etc/group
     ! objectstore_tool $dir $osd NOTEXISTS get-bytes || return 1
@@ -883,7 +883,7 @@ function test_objectstore_tool() {
 # @return 0 if recovery in progress, 1 otherwise
 #
 function get_is_making_recovery_progress() {
-    local progress=$(ceph --format xml status 2>/dev/null | \
+    local progress=$($CEPH_BIN/ceph --format xml status 2>/dev/null | \
         $XMLSTARLET sel \
         -t -m "//pgmap/recovering_keys_per_sec" -v . -o ' ' \
         -t -m "//pgmap/recovering_bytes_per_sec" -v . -o ' ' \
@@ -919,7 +919,7 @@ function get_num_active_clean() {
     # xmlstarlet 1.3.0 (which is on Ubuntu precise)
     # add extra new lines that must be ignored with
     # grep -v '^$' 
-    ceph --format xml pg dump pgs 2>/dev/null | \
+    $CEPH_BIN/ceph --format xml pg dump pgs 2>/dev/null | \
         $XMLSTARLET sel -t -m "//pg_stat/state[$expression]" -v . -n | \
         grep -v '^$' | wc -l
 }
@@ -946,7 +946,7 @@ function test_get_num_active_clean() {
 # @return 0 on success, 1 on error
 #
 function get_num_pgs() {
-    ceph --format xml status 2>/dev/null | \
+    $CEPH_BIN/ceph --format xml status 2>/dev/null | \
         $XMLSTARLET sel -t -m "//pgmap/num_pgs" -v .
 }
 
@@ -975,7 +975,7 @@ function test_get_num_pgs() {
 #
 function get_last_scrub_stamp() {
     local pgid=$1
-    ceph --format xml pg dump pgs 2>/dev/null | \
+    $CEPH_BIN/ceph --format xml pg dump pgs 2>/dev/null | \
         $XMLSTARLET sel -t -m "//pg_stat[pgid='$pgid']/last_scrub_stamp" -v .
 }
 
@@ -1076,7 +1076,7 @@ function test_wait_for_clean() {
 function repair() {
     local pgid=$1
     local last_scrub=$(get_last_scrub_stamp $pgid)
-    ceph pg repair $pgid
+    $CEPH_BIN/ceph pg repair $pgid
     wait_for_scrub $pgid "$last_scrub"
 }
 
@@ -1107,7 +1107,7 @@ function test_repair() {
 function pg_scrub() {
     local pgid=$1
     local last_scrub=$(get_last_scrub_stamp $pgid)
-    ceph pg scrub $pgid
+    $CEPH_BIN/ceph pg scrub $pgid
     wait_for_scrub $pgid "$last_scrub"
 }
 
@@ -1208,7 +1208,7 @@ function test_wait_for_scrub() {
     run_osd $dir 0 || return 1
     wait_for_clean || return 1
     local pgid=1.0
-    ceph pg repair $pgid
+    $CEPH_BIN/ceph pg repair $pgid
     local last_scrub=$(get_last_scrub_stamp $pgid)
     wait_for_scrub $pgid "$last_scrub" || return 1
     kill_daemons $dir KILL osd || return 1
@@ -1230,12 +1230,12 @@ function erasure_code_plugin_exists() {
     local plugin=$1
 
     local status
-    if ceph osd erasure-code-profile set TESTPROFILE plugin=$plugin 2>&1 |
+    if $CEPH_BIN/ceph osd erasure-code-profile set TESTPROFILE plugin=$plugin 2>&1 |
         grep "$plugin.*No such file" ; then
         status=1
     else
         status=0
-        ceph osd erasure-code-profile rm TESTPROFILE
+        $CEPH_BIN/ceph osd erasure-code-profile rm TESTPROFILE
     fi
     return $status
 }

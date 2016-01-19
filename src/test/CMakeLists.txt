@@ -1,3 +1,5 @@
+include(AddCephTest)
+
 # test_timers
 add_executable(test_timers
   TestTimers.cc
@@ -317,8 +319,11 @@ add_dependencies(check
   osdmaptool
   ceph-monstore-tool)
 
-add_test(NAME test_helpers COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/test-ceph-helpers.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-add_dependencies(check test_helpers)
+add_ceph_make_check_test(test-ceph-helpers.sh ${CMAKE_SOURCE_DIR}/src/test/test-ceph-helpers.sh)
+#add_ceph_make_check_test(test-ceph-helpers.sh test-ceph-helpers.sh)
+
+#add_test(NAME test_helpers COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/test-ceph-helpers.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+#add_dependencies(check test_helpers)
 
 add_test(NAME osd_config COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-config.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check osd_config)
@@ -395,11 +400,11 @@ add_dependencies(check encode_decode_non_regression)
 add_test(NAME test_ceph_argparse_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_argparse.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check test_ceph_argparse_py)
 
-add_test(NAME test_ceph_daemon COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_daemon.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-add_dependencies(check test_ceph_daemon)
+add_ceph_make_check_test(test_ceph_daemon.py pybind/test_ceph_daemon.py)
+#add_test(NAME test_ceph_daemon COMMAND python ${CMAKE_SOURCE_DIR}/src/test/pybind/test_ceph_daemon.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+#add_dependencies(check test_ceph_daemon)
 
 set_property(TEST 
-  test_helpers 
   osd_config
   osd_copy_from
   osd_crush
@@ -425,7 +430,6 @@ set_property(TEST
   osd_erasure_code_profile
   encode_decode_non_regression
   test_ceph_argparse_py
-  test_ceph_daemon
   PROPERTY ENVIRONMENT 
   CEPH_ROOT=${CMAKE_SOURCE_DIR}
   CEPH_BIN=${CMAKE_BINARY_DIR}/bin
@@ -460,16 +464,17 @@ add_executable(unittest_blkdev EXCLUDE_FROM_ALL
   common/test_blkdev.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-add_test(NAME unittest_blkdev COMMAND ./unittest_blkdev WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check unittest_blkdev)
+#add_test(NAME unittest_blkdev COMMAND ./unittest_blkdev WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
+#add_dependencies(check unittest_blkdev)
+add_ceph_unittest(unittest_blkdev ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/unittest_blkdev)
 target_link_libraries(unittest_blkdev
   global
-  ${BLKID_LIBRARIES}
-  ${CMAKE_DL_LIBS}
-  ${ALLOC_LIBS}
-  ${UNITTEST_LIBS})
-set_target_properties(unittest_blkdev PROPERTIES COMPILE_FLAGS
-  ${UNITTEST_CXX_FLAGS})
+  ${BLKID_LIBRARIES})
+  #${CMAKE_DL_LIBS}
+  #${ALLOC_LIBS}
+  #${UNITTEST_LIBS})
+#set_target_properties(unittest_blkdev PROPERTIES COMPILE_FLAGS
+#${UNITTEST_CXX_FLAGS})
 
 # unittest_chain_xattr
 add_executable(unittest_chain_xattr EXCLUDE_FROM_ALL
@@ -1447,11 +1452,13 @@ add_executable(unittest_rocksdb_option EXCLUDE_FROM_ALL
   objectstore/TestRocksdbOptionParse.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-add_test(unittest_rocksdb_option unittest_rocksdb_option)
-add_dependencies(check unittest_rocksdb_option)
-target_link_libraries(unittest_rocksdb_option global os ${CMAKE_DL_LIBS}
-  ${BLKID_LIBRARIES} ${ALLOC_LIBS} ${UNITTEST_LIBS})
-set_target_properties(unittest_rocksdb_option PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+add_ceph_unittest(unittest_rocksdb_option ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/unittest_rocksdb_option)
+#add_test(unittest_rocksdb_option unittest_rocksdb_option)
+#add_dependencies(check unittest_rocksdb_option)
+#target_link_libraries(unittest_rocksdb_option global os ${CMAKE_DL_LIBS}
+#    ${BLKID_LIBRARIES} ${ALLOC_LIBS} ${UNITTEST_LIBS})
+target_link_libraries(unittest_rocksdb_option global rocksdb os ${BLKID_LIBRARIES})
+#set_target_properties(unittest_rocksdb_option PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
 # unittest_bluefs
 add_executable(unittest_bluefs EXCLUDE_FROM_ALL objectstore/test_bluefs.cc)

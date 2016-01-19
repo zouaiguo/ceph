@@ -1666,7 +1666,7 @@ function test_mon_crushmap_validation()
   local map=$TMPDIR/map
   $CEPH_BIN/ceph osd getcrushmap -o $map
 
-  local crushtool_path="${TMPDIR}/crushtool"
+  local crushtool_path="$CEPH_BIN/crushtool"
   touch "${crushtool_path}"
   chmod +x "${crushtool_path}"
   local crushtool_path_old=`$CEPH_BIN/ceph-conf --show-config-value crushtool`
