@@ -131,6 +131,7 @@ add_library(cls_numops_client STATIC numops/cls_numops_client.cc)
 add_library(cls_lua SHARED
     lua/cls_lua.cc
     lua/lua_bufferlist.cc
+    lua/lua_struct.c
 )
 set_target_properties(cls_lua PROPERTIES VERSION "1.0.0" SOVERSION "1")
 install(TARGETS cls_lua DESTINATION lib/rados-classes)

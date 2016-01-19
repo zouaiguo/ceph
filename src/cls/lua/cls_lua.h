@@ -6,6 +6,10 @@
 
 #define LOG_LEVEL_DEFAULT 10
 
+extern "C" {
+  int luaopen_struct(lua_State *L);
+}
+
 int luaopen_bufferlist(lua_State *L);
 
 bufferlist *clslua_checkbufferlist(lua_State *L, int pos = 1);

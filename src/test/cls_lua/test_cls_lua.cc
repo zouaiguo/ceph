@@ -519,6 +519,14 @@ end
 objclass.register(current_version)
 objclass.register(current_subop_num)
 objclass.register(current_subop_version)
+
+function struct_mod(input, output)
+  local data = struct.pack("HH", 1, 2)
+  objclass.log(0, "struct.pack", data)
+  objclass.log(0, "struct.unpack", struct.unpack("HH", data))
+end
+
+objclass.register(struct_mod)
 )luascript";
 
 /*
@@ -1102,4 +1110,10 @@ TEST_F(ClsLua, Json) {
 
   std::string out(outbl.c_str(), outbl.length());
   ASSERT_STREQ(out.c_str(), "omg it works");
+}
+
+TEST_F(ClsLua, StructMod) {
+  ASSERT_EQ(0, ioctx.create(oid, false));
+
+  ASSERT_EQ(0, clslua_exec(test_script, NULL, "struct_mod"));
 }
