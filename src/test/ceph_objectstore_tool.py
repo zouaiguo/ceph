@@ -51,6 +51,9 @@ def wait_for_health():
 
 
 def get_pool_id(name, nullfd):
+    #ceph_bin = os.environ["CEPH_BIN"]
+    #print ceph_bin
+    #cmd = "{path}/ceph osd pool stats {pool}".format(pool=name, path=ceph_bin).split()
     cmd = "./ceph osd pool stats {pool}".format(pool=name).split()
     # pool {pool} id # .... grab the 4 field
     return check_output(cmd, stderr=nullfd).split()[3]
@@ -138,7 +141,8 @@ def cat_file(level, filename):
 def vstart(new, opt=""):
     print "vstarting....",
     NEW = new and "-n" or ""
-    call("MON=1 OSD=4 CEPH_PORT=7400 ./vstart.sh -l {new} -d mon osd {opt} > /dev/null 2>&1".format(new=NEW, opt=opt), shell=True)
+    ceph_root = os.environ["CEPH_ROOT"]
+    call("MON=1 OSD=4 CEPH_PORT=7400 {path}/src/vstart.sh -l {new} -d mon osd {opt} > /dev/null 2>&1".format(new=NEW, opt=opt, path=ceph_root), shell=True)
     print "DONE"
 
 
@@ -1863,5 +1867,5 @@ if __name__ == "__main__":
         status = main(sys.argv[1:])
     finally:
         kill_daemons()
-        call("/bin/rm -fr {dir}".format(dir=CEPH_DIR), shell=True)
+        #call("/bin/rm -fr {dir}".format(dir=CEPH_DIR), shell=True)
     sys.exit(status)

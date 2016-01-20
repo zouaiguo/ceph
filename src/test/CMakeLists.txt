@@ -319,20 +319,20 @@ add_dependencies(check
   osdmaptool
   ceph-monstore-tool)
 
-add_ceph_make_check_test(test-ceph-helpers.sh ${CMAKE_SOURCE_DIR}/src/test/test-ceph-helpers.sh)
-#add_ceph_make_check_test(test-ceph-helpers.sh test-ceph-helpers.sh)
+add_ceph_make_check_test(ceph-disk.sh ${CMAKE_SOURCE_DIR}/src/test/ceph-disk.sh)
+add_ceph_make_check_test(ceph_objectstore_tool.py ${CMAKE_SOURCE_DIR}/src/test/ceph_objectstore_tool.py)
+add_ceph_make_check_test(run-rbd-unit-tests.sh ${CMAKE_SOURCE_DIR}/src/test/run-rbd-unit-tests.sh)
+add_ceph_make_check_test(rados-striper.sh ${CMAKE_SOURCE_DIR}/src/test/libradosstriper/rados-striper.sh)
+add_ceph_make_check_test(cephtool-test-rados.sh ${CMAKE_SOURCE_DIR}/src/test/cephtool-test-rados.sh)
+#erasure code cpp tests
 
-#add_test(NAME test_helpers COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/test-ceph-helpers.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-#add_dependencies(check test_helpers)
+add_ceph_make_check_test(mkfs.sh ${CMAKE_SOURCE_DIR}/src/test/mon/mkfs.sh)
 
 add_test(NAME osd_config COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-config.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check osd_config)
 
 add_test(NAME osd_copy_from COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-copy-from.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check osd_copy_from)
-
-add_test(NAME rados_striper COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/libradosstriper/rados-striper.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-add_dependencies(check rados_striper)
 
 add_test(NAME osd_bench COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-bench.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check osd_bench)
@@ -346,9 +346,6 @@ add_dependencies(check test_erasure_code)
 add_test(NAME test_erasure_eio COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/erasure-code/test-erasure-eio.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check test_erasure_eio)
 
-add_test(NAME cephtool_test_rados COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/cephtool-test-rados.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-add_dependencies(check cephtool_test_rados)
-
 add_test(NAME cephtool_test_mon COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/cephtool-test-mon.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check cephtool_test_mon)
 
@@ -360,9 +357,6 @@ add_dependencies(check cephtool_test_mds)
 
 add_test(NAME osd_mark_down COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/osd/osd-markdown.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check osd-markdown)
-
-add_test(NAME ceph_disk COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/ceph-disk.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-add_dependencies(check ceph_disk)
 
 add_test(NAME unittest_bufferlist_shell COMMAND bash ${CMAKE_SOURCE_DIR}/src/unittest_bufferlist.sh WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_dependencies(check unittest_bufferlist_shell)
@@ -408,17 +402,14 @@ set_property(TEST
   osd_config
   osd_copy_from
   osd_crush
-  rados_striper
   osd_bench
   osd_scrub_repair
   test_erasure_code
   test_erasure_eio
-  cephtool_test_rados
   cephtool_test_mon
   cephtool_test_osd
   cephtool_test_mds
   osd_mark_down
-  ceph_disk
   misc
   unittest_bufferlist_shell
   osd_reactivate
@@ -437,15 +428,6 @@ set_property(TEST
   CEPH_BUILD_DIR=${CMAKE_BINARY_DIR}
   LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib
   PYTHONPATH=${CMAKE_SOURCE_DIR}/src/pybind)
-
-add_test(NAME mkfs COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/mon/mkfs.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check mkfs)
-
-add_test(NAME run_rbd_unit_tests COMMAND bash ${CMAKE_SOURCE_DIR}/src/test/run-rbd-unit-tests.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/src)
-add_dependencies(check run_rbd_unit_tests)
-
-add_test(NAME ceph_objectstore_tool_py COMMAND python ${CMAKE_SOURCE_DIR}/src/test/ceph_objectstore_tool.py WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-add_dependencies(check ceph_objectstore_tool_py)
 
 # unittest_admin_socket
 add_executable(unittest_admin_socket EXCLUDE_FROM_ALL

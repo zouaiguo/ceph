@@ -39,10 +39,10 @@ function teardown() {
 function mon_mkfs() {
     local fsid=$(uuidgen)
 
-    ./ceph-mon \
+    $CEPH_BIN/ceph-mon \
         --id $MON_ID \
         --fsid $fsid \
-        --erasure-code-dir=.libs \
+        --erasure-code-dir=$CEPH_LIB \
         --mkfs \
         --mon-data=$MON_DIR \
         --mon-initial-members=$MON_ID \
@@ -51,12 +51,12 @@ function mon_mkfs() {
 }
 
 function mon_run() {
-    ./ceph-mon \
+    $CEPH_BIN/ceph-mon \
         --id $MON_ID \
         --chdir= \
         --mon-osd-full-ratio=.99 \
         --mon-data-avail-crit=1 \
-        --erasure-code-dir=.libs \
+        --erasure-code-dir=$CEPH_LIB \
         --mon-data=$MON_DIR \
         --log-file=$MON_DIR/log \
         --mon-cluster-log-file=$MON_DIR/log \
@@ -79,11 +79,11 @@ function kill_daemons() {
 function auth_none() {
     mon_mkfs --auth-supported=none
 
-    ./ceph-mon \
+    $CEPH_BIN/ceph-mon \
         --id $MON_ID \
         --mon-osd-full-ratio=.99 \
         --mon-data-avail-crit=1 \
-        --erasure-code-dir=.libs \
+        --erasure-code-dir=$CEPH_LIB \
         --mon-data=$MON_DIR \
         --extract-monmap $MON_DIR/monmap
 
@@ -93,7 +93,7 @@ function auth_none() {
 
     mon_run --auth-supported=none
     
-    timeout $TIMEOUT ./ceph --mon-host $CEPH_MON mon stat || return 1
+    timeout $TIMEOUT $CEPH_BIN/ceph --mon-host $CEPH_MON mon stat || return 1
 }
 
 function auth_cephx_keyring() {
@@ -109,7 +109,7 @@ EOF
 
     mon_run
 
-    timeout $TIMEOUT ./ceph \
+    timeout $TIMEOUT $CEPH_BIN/ceph \
         --name mon. \
         --keyring $MON_DIR/keyring \
         --mon-host $CEPH_MON mon stat || return 1
@@ -121,7 +121,7 @@ function auth_cephx_key() {
 	return 1
     fi  
 
-    local key=$(./ceph-authtool --gen-print-key)
+    local key=$($CEPH_BIN/ceph-authtool --gen-print-key)
 
     if mon_mkfs --key='corrupted key' ; then
         return 1
@@ -136,7 +136,7 @@ function auth_cephx_key() {
 
     mon_run
 
-    timeout $TIMEOUT ./ceph \
+    timeout $TIMEOUT $CEPH_BIN/ceph \
         --name mon. \
         --keyring $MON_DIR/keyring \
         --mon-host $CEPH_MON mon stat || return 1
@@ -146,11 +146,11 @@ function makedir() {
     local toodeep=$MON_DIR/toodeep
 
     # fail if recursive directory creation is needed
-    ./ceph-mon \
+    $CEPH_BIN/ceph-mon \
         --id $MON_ID \
         --mon-osd-full-ratio=.99 \
         --mon-data-avail-crit=1 \
-        --erasure-code-dir=.libs \
+        --erasure-code-dir=$CEPH_LIB \
         --mkfs \
         --mon-data=$toodeep 2>&1 | tee $DIR/makedir.log
     grep 'toodeep.*No such file' $DIR/makedir.log > /dev/null
