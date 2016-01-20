@@ -2575,8 +2575,8 @@ int RGW_Auth_S3::authorize_v4(RGWRados *store, struct req_state *s)
   string::size_type pos;
   bool using_qs;
 
-  time_t now, now_req=0;
-  time(&now);
+  utime_t now_req;
+  utime_t now = ceph_clock_now(s->cct);
 
   /* v4 requires rados auth */
   if (!store->ctx()->_conf->rgw_s3_auth_use_rados) {
@@ -2615,8 +2615,8 @@ int RGW_Auth_S3::authorize_v4(RGWRados *store, struct req_state *s)
         return -EPERM;
       }
       /* handle expiration in epoch time */
-      now_req = mktime(&date_t);
-      if (now >= now_req + exp) {
+      now_req = utime_t(&date_t);
+      if (now.sec() >= now_req.sec() + exp) {
         dout(10) << "NOTICE: now = " << now << ", now_req = " << now_req << ", exp = " << exp << dendl;
         return -EPERM;
       }
