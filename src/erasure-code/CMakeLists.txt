@@ -63,6 +63,7 @@ else(INTEL_SSE4_1)
   message(STATUS "Skipping target ec_jerasure_sse4 & ec_shec_sse4: -msse4.1 not supported")
 endif(INTEL_SSE4_1)
 
+#jerasure subdir must be before shec so jerasure & neon obj libs are declared
 add_subdirectory(jerasure)
 add_subdirectory(lrc)
 add_subdirectory(shec)

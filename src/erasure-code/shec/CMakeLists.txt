@@ -6,22 +6,8 @@ set(shec_srcs
   ErasureCodeShec.cc 
   ErasureCodeShecTableCache.cc 
   determinant.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/jerasure/src/cauchy.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/jerasure/src/galois.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/jerasure/src/jerasure.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/jerasure/src/liberation.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/jerasure/src/reed_sol.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_wgen.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_method.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_w16.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_w32.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_w64.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_w128.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_general.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_w4.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_rand.c 
-  ${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/src/gf_w8.c)
+  $<TARGET_OBJECTS:jerasure_objs>
+  )
 
 include_directories(${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/jerasure/include)
 include_directories(${CMAKE_SOURCE_DIR}/src/erasure-code/jerasure/gf-complete/include)
@@ -36,11 +22,8 @@ install(TARGETS ec_shec_generic DESTINATION lib/erasure-code)
 # ec_shec_sse3
 set(shec_neon_srcs
   ${shec_srcs}
-  erasure-code/jerasure/gf-complete/src/neon/gf_w4_neon.c 
-  erasure-code/jerasure/gf-complete/src/neon/gf_w8_neon.c 
-  erasure-code/jerasure/gf-complete/src/neon/gf_w16_neon.c 
-  erasure-code/jerasure/gf-complete/src/neon/gf_w32_neon.c 
-  erasure-code/jerasure/gf-complete/src/neon/gf_w64_neon.c)
+  $<TARGET_OBJECTS:neon_objs>
+  )
 
 #TODO:build libec_shec_neon library on an ARM machine
 if(ARM_NEON OR ARM_NEON2)

@@ -3,7 +3,7 @@
 include_directories(gf-complete/include)
 include_directories(jerasure/include)
 
-set(jerasure_srcs
+set(jerasure_obj_srcs
   jerasure/src/cauchy.c
   jerasure/src/galois.c
   jerasure/src/jerasure.c
@@ -20,25 +20,36 @@ set(jerasure_srcs
   gf-complete/src/gf_w4.c
   gf-complete/src/gf_rand.c
   gf-complete/src/gf_w8.c
+  )
+add_library(jerasure_objs OBJECT ${jerasure_obj_srcs})
+
+set(jerasure_srcs
   ErasureCodePluginJerasure.cc
   ErasureCodeJerasure.cc
-  $<TARGET_OBJECTS:erasure_code_objs>
-)
+  $<TARGET_OBJECTS:jerasure_objs>
+  )
 
-add_library(ec_jerasure_generic SHARED ${jerasure_srcs})
+add_library(ec_jerasure_generic SHARED 
+  ${jerasure_srcs}
+  $<TARGET_OBJECTS:erasure_code_objs>
+  )
 add_dependencies(ec_jerasure_generic ${CMAKE_SOURCE_DIR}/src/ceph_ver.h)
 target_link_libraries(ec_jerasure_generic ${EXTRALIBS})
 set_target_properties(ec_jerasure_generic PROPERTIES VERSION 2.0.0 SOVERSION 2)
 install(TARGETS ec_jerasure_generic DESTINATION lib/erasure-code)
 
+set(neon_objs_srcs
+  gf-complete/src/neon/gf_w4_neon.c
+  gf-complete/src/neon/gf_w8_neon.c
+  gf-complete/src/neon/gf_w16_neon.c
+  gf-complete/src/neon/gf_w32_neon.c
+  gf-complete/src/neon/gf_w64_neon.c)
+
+add_library(neon_objs OBJECT ${neon_obj_srcs})
 set(jerasure_neon_srcs
   ${jerasure_srcs}
-  erasure-code/jerasure/gf-complete/src/neon/gf_w4_neon.c 
-  erasure-code/jerasure/gf-complete/src/neon/gf_w8_neon.c 
-  erasure-code/jerasure/gf-complete/src/neon/gf_w16_neon.c 
-  erasure-code/jerasure/gf-complete/src/neon/gf_w32_neon.c 
-  erasure-code/jerasure/gf-complete/src/neon/gf_w64_neon.c)
-
+  $<TARGET_OBJECTS:neon_objs>
+  )
 
 #TODO:build libec_jerasure_neon library on an ARM machine
 if(ARM_NEON OR ARM_NEON2)
