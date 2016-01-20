@@ -8,6 +8,7 @@ install(FILES
 	osdmaptool.8
 	monmaptool.8
 	ceph-conf.8
+	ceph-crush-location.8
 	ceph-run.8
 	ceph.8
 	mount.ceph.8

@@ -918,6 +918,7 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 %{_mandir}/man8/ceph-authtool.8*
 %{_mandir}/man8/ceph-conf.8*
+%{_mandir}/man8/ceph-crush-location.8*
 %{_mandir}/man8/ceph-dencoder.8*
 %{_mandir}/man8/ceph-rbdnamer.8*
 %{_mandir}/man8/ceph-syn.8*
