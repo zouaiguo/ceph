@@ -67,8 +67,8 @@ public:
   utime_t(const struct timeval *v) {
     set_from_timeval(v);
   }
-  utime_t(struct tm *v) { /* note that v might be modified */
-    tv.tv_sec = mktime(v);
+  utime_t(struct tm& v) { /* note that v might be modified */
+    tv.tv_sec = mktime(&v);
     tv.tv_nsec = 0;
   }
   void to_timespec(struct timespec *ts) const {
