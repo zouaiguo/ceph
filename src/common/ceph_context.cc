@@ -32,6 +32,8 @@
 #include "include/str_list.h"
 #include "common/Mutex.h"
 #include "common/Cond.h"
+#include "common/PluginRegistry.h"
+#include "common/valgrind.h"
 
 #include <iostream>
 #include <pthread.h>
@@ -398,11 +400,12 @@ void CephContext::do_command(std::string command, cmdmap_t& cmdmap,
 }
 
 
-CephContext::CephContext(uint32_t module_type_)
+CephContext::CephContext(uint32_t module_type_, int init_flags_)
   : nref(1),
     _conf(new md_config_t()),
     _log(NULL),
     _module_type(module_type_),
+    _init_flags(init_flags_),
     _crypto_inited(false),
     _service_thread(NULL),
     _log_obs(NULL),
@@ -412,6 +415,7 @@ CephContext::CephContext(uint32_t module_type_)
     _heartbeat_map(NULL),
     _crypto_none(NULL),
     _crypto_aes(NULL),
+    _plugin_registry(NULL),
     _lockdep_obs(NULL),
     _cct_perf(NULL)
 {
@@ -436,6 +440,8 @@ CephContext::CephContext(uint32_t module_type_)
  
   _admin_socket = new AdminSocket(this);
   _heartbeat_map = new HeartbeatMap(this);
+
+  _plugin_registry = new PluginRegistry(this);
 
   _admin_hook = new CephContextHook(this);
   _admin_socket->register_command("perfcounters_dump", "perfcounters_dump", _admin_hook, "");
@@ -472,6 +478,8 @@ CephContext::~CephContext()
     delete _cct_perf;
     _cct_perf = NULL;
   }
+
+  delete _plugin_registry;
 
   _admin_socket->unregister_command("perfcounters_dump");
   _admin_socket->unregister_command("perf dump");
@@ -526,6 +534,16 @@ CephContext::~CephContext()
     ceph::crypto::shutdown();
 }
 
+void CephContext::put() {
+  if (nref.dec() == 0) {
+    ANNOTATE_HAPPENS_AFTER(&nref);
+    ANNOTATE_HAPPENS_BEFORE_FORGET_ALL(&nref);
+    delete this;
+  } else {
+    ANNOTATE_HAPPENS_BEFORE(&nref);
+  }
+}
+
 void CephContext::init_crypto()
 {
   ceph::crypto::init(this);
@@ -540,7 +558,7 @@ void CephContext::start_service_thread()
     return;
   }
   _service_thread = new CephContextServiceThread(this);
-  _service_thread->create();
+  _service_thread->create("service");
   ceph_spin_unlock(&_service_thread_lock);
 
   // make logs flush on_exit()
@@ -584,6 +602,11 @@ void CephContext::join_service_thread()
 uint32_t CephContext::get_module_type() const
 {
   return _module_type;
+}
+
+int CephContext::get_init_flags() const
+{
+  return _init_flags;
 }
 
 PerfCountersCollection *CephContext::get_perfcounters_collection()
