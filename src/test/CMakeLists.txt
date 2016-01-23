@@ -1624,53 +1624,134 @@ set(librados_test_stub_srcs
   librados_test_stub/TestIoCtxImpl.cc
   librados_test_stub/TestMemIoCtxImpl.cc
   librados_test_stub/TestMemRadosClient.cc
-  librados_test_stub/TestRadosClient.cc)
+  librados_test_stub/TestRadosClient.cc
+  librados_test_stub/TestWatchNotify.cc)
 add_library(librados_test_stub STATIC ${librados_test_stub_srcs})
   
 # unittest_librbd
-add_executable(unittest_librbd EXCLUDE_FROM_ALL
-  librbd/test_librbd.cc
+set(librbd_test
   librbd/test_fixture.cc
+  librbd/test_support.cc
+  librbd/test_librbd.cc
   librbd/test_ImageWatcher.cc
   librbd/test_internal.cc
-  librbd/test_support.cc
+  librbd/test_ObjectMap.cc
+  librbd/journal/test_Entries.cc
+  librbd/journal/test_Replay.cc)
+add_library(rbd_test STATIC ${librbd_test})
+set_target_properties(rbd_test PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
+
+set(unittest_librbd_srcs
   librbd/test_main.cc
+  librbd/test_mock_fixture.cc 
+  librbd/test_mock_ExclusiveLock.cc 
+  librbd/test_mock_Journal.cc 
+  librbd/exclusive_lock/test_mock_AcquireRequest.cc 
+  librbd/exclusive_lock/test_mock_ReleaseRequest.cc 
+  librbd/journal/test_mock_Replay.cc 
+  librbd/object_map/test_mock_InvalidateRequest.cc 
+  librbd/object_map/test_mock_LockRequest.cc 
+  librbd/object_map/test_mock_RefreshRequest.cc 
+  librbd/object_map/test_mock_ResizeRequest.cc 
+  librbd/object_map/test_mock_SnapshotCreateRequest.cc 
+  librbd/object_map/test_mock_SnapshotRemoveRequest.cc 
+  librbd/object_map/test_mock_SnapshotRollbackRequest.cc 
+  librbd/object_map/test_mock_UnlockRequest.cc 
+  librbd/object_map/test_mock_UpdateRequest.cc 
+  librbd/operation/test_mock_ResizeRequest.cc 
+  librbd/operation/test_mock_SnapshotCreateRequest.cc 
+  librbd/operation/test_mock_SnapshotProtectRequest.cc 
+  librbd/operation/test_mock_SnapshotRemoveRequest.cc 
+  librbd/operation/test_mock_SnapshotRollbackRequest.cc 
+  librbd/operation/test_mock_SnapshotUnprotectRequest.cc
+  )
+add_executable(unittest_librbd EXCLUDE_FROM_ALL
+  ${unittest_librbd_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   ${CMAKE_SOURCE_DIR}/src/common/TextTable.cc
-  ${CMAKE_SOURCE_DIR}/src/common/secret.c
+  ${CMAKE_SOURCE_DIR}/src/common/ContextCompletion.cc
+  $<TARGET_OBJECTS:parse_secret_objs>
   )
+target_compile_definitions(unittest_librbd PUBLIC "-DTEST_LIBRBD_INTERNALS")
 add_dependencies(check unittest_librbd)
 set_target_properties(unittest_librbd PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
-if(${WITH_LTTNG})
-  target_link_libraries(unittest_librbd librbd_tp)
-endif(${WITH_LTTNG})
 target_link_libraries(unittest_librbd
-  librbd
+  librados_test_stub
   librados
+  librados_api
+  rbd_test
+  rbd_api
+  rbd_internal
+  rbd_types
   journal
   cls_journal_client
-  librados_api
-  librados_test_stub
-  ${UNITTEST_LIBS}
+  cls_rbd_client
+  cls_lock_client
+  osdc
   global
-  ${CMAKE_DL_LIBS}
-  ${ALLOC_LIBS}
-  ${CRYPTO_LIBS}
-  ${EXTRALIBS}
-  blkid
-  udev
-  keyutils
+  ${UNITTEST_LIBS}
   radostest
+  ${ALLOC_LIBS}
+  keyutils
   )
 
-add_executable(test_librbd_fsx
+add_executable(ceph_test_librbd
+  librbd/test_main.cc
+  $<TARGET_OBJECTS:heap_profiler_objs>
+  ${CMAKE_SOURCE_DIR}/src/common/TextTable.cc
+  ${CMAKE_SOURCE_DIR}/src/common/ContextCompletion.cc
+  $<TARGET_OBJECTS:parse_secret_objs>
+  )
+target_link_libraries(ceph_test_librbd
+  librados_test_stub
+  librados
+  rbd_test
+  rbd_api
+  rbd_internal
+  rbd_types
+  journal
+  cls_journal_client
+  cls_rbd_client
+  cls_lock_client
+  osdc
+  global
+  ${UNITTEST_LIBS}
+  radostest
+  ${ALLOC_LIBS}
+  keyutils
+  )
+set_target_properties(ceph_test_librbd PROPERTIES COMPILE_FLAGS
+  ${UNITTEST_CXX_FLAGS})
+
+add_executable(ceph_test_librbd_api
+  librbd/test_support.cc
+  librbd/test_librbd.cc
+  librbd/test_main.cc
+  $<TARGET_OBJECTS:heap_profiler_objs>
+  ${CMAKE_SOURCE_DIR}/src/common/TextTable.cc
+  $<TARGET_OBJECTS:parse_secret_objs>
+  )
+target_link_libraries(ceph_test_librbd_api
+  librbd
+  librados
+  common
+  radostest
+  ${UNITTEST_LIBS}
+  ${ALLOC_LIBS}
+  keyutils
+  )
+set_target_properties(ceph_test_librbd_api PROPERTIES COMPILE_FLAGS
+  ${UNITTEST_CXX_FLAGS})
+
+add_executable(ceph_test_librbd_fsx
   librbd/fsx.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
+  $<TARGET_OBJECTS:krbd_objs>
   ${CMAKE_SOURCE_DIR}/src/common/TextTable.cc
   ${CMAKE_SOURCE_DIR}/src/common/secret.c
   )
-target_link_libraries(test_librbd_fsx
+target_link_libraries(ceph_test_librbd_fsx
   librbd
   librados
   global
