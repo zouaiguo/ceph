@@ -3929,7 +3929,6 @@ next:
       if (fin) {
         fin->complete(get_rval());
       }
-      delete this;
     }
   };
 
