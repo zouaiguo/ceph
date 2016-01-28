@@ -4114,7 +4114,8 @@ void CInode::scrub_maybe_delete_info()
 }
 
 void CInode::scrub_initialize(CDentry *scrub_parent,
-			      const ScrubHeaderRefConst& header, Context *f)
+			      const ScrubHeaderRefConst& header,
+			      MDSInternalContextBase *f)
 {
   dout(20) << __func__ << " with scrub_version " << get_version() << dendl;
   assert(!scrub_infop || !scrub_infop->scrub_in_progress);
@@ -4213,7 +4214,7 @@ void CInode::scrub_dirfrag_finished(frag_t dirfrag)
   si.last_scrub_version = si.scrub_start_version;
 }
 
-void CInode::scrub_finished(Context **c) {
+void CInode::scrub_finished(MDSInternalContextBase **c) {
   dout(20) << __func__ << dendl;
   assert(scrub_info()->scrub_in_progress);
   for (std::map<frag_t, scrub_stamp_info_t>::iterator i =
@@ -4240,6 +4241,7 @@ void CInode::scrub_finished(Context **c) {
   }
 
   *c = scrub_infop->on_finish;
+  scrub_infop->on_finish = NULL;
 
   if (scrub_infop->header && scrub_infop->header->origin == this) {
     // We are at the point that a tagging scrub was initiated
