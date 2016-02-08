@@ -1232,7 +1232,7 @@ class RGWRados
 
   int get_olh_target_state(RGWObjectCtx& rctx, rgw_obj& obj, RGWObjState *olh_state,
                            RGWObjState **target_state, RGWObjVersionTracker *objv_tracker);
-  int get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh);
+  int get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh, bool fake_not_exist);
   int append_atomic_test(RGWObjectCtx *rctx, rgw_obj& obj,
                          librados::ObjectOperation& op, RGWObjState **state);
 
@@ -1479,11 +1479,12 @@ public:
     bool bs_initialized;
 
   protected:
-    int get_state(RGWObjState **pstate, bool follow_olh);
+    int get_state(RGWObjState **pstate, bool follow_olh, bool fake_not_exist = false);
     void invalidate_state();
 
     int prepare_atomic_modification(librados::ObjectWriteOperation& op, bool reset_obj, const string *ptag,
-                                    const char *ifmatch, const char *ifnomatch, bool removal_op);
+                                    const char *ifmatch, const char *ifnomatch, bool removal_op,
+                                    RGWObjState **pstate = NULL, bool fake_not_exist = false);
     int complete_atomic_modification();
 
   public:
@@ -1515,6 +1516,10 @@ public:
 
     bool versioning_enabled() {
       return (!versioning_disabled && bucket_info.versioning_enabled());
+    }
+
+    bool versioned() {
+      return bucket_info.versioned();
     }
 
     struct Read {
@@ -1554,7 +1559,13 @@ public:
     };
 
     struct Write {
+    private:
+      int do_write_meta(uint64_t size,  map<std::string, bufferlist>& attrs, bool exist_retry);
+
+    public:
       RGWRados::Object *target;
+
+      
       
       struct MetaParams {
         time_t *mtime;
@@ -1578,7 +1589,9 @@ public:
 
       Write(RGWRados::Object *_target) : target(_target) {}
 
-      int write_meta(uint64_t size,  map<std::string, bufferlist>& attrs);
+      int write_meta(uint64_t size,  map<std::string, bufferlist>& attrs) {
+        return do_write_meta(size, attrs, false);
+      }
       int write_data(const char *data, uint64_t ofs, uint64_t len, bool exclusive);
     };
 
@@ -1892,9 +1905,9 @@ public:
                         map<string, bufferlist>* rmattrs,
                         RGWObjVersionTracker *objv_tracker);
 
-  int get_obj_state(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh);
+  int get_obj_state(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh, bool fake_not_exist);
   int get_obj_state(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker) {
-    return get_obj_state(rctx, obj, state, objv_tracker, true);
+    return get_obj_state(rctx, obj, state, objv_tracker, true, false);
   }
 
   virtual int stat_system_obj(RGWObjectCtx& obj_ctx,

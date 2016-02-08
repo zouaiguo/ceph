@@ -3305,8 +3305,8 @@ int RGWRados::BucketShard::init(rgw_bucket& _bucket, rgw_obj& obj)
  * exclusive: create object exclusively
  * Returns: 0 on success, -ERR# otherwise.
  */
-int RGWRados::Object::Write::write_meta(uint64_t size,
-                  map<string, bufferlist>& attrs)
+int RGWRados::Object::Write::do_write_meta(uint64_t size,
+                  map<string, bufferlist>& attrs, bool exist_retry)
 {
   rgw_bucket bucket;
   rgw_rados_ref ref;
@@ -3314,22 +3314,21 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
 
   ObjectWriteOperation op;
 
-  RGWObjState *state;
-  int r = target->get_state(&state, false);
+  RGWObjState *state = NULL;
+
+  rgw_obj& obj = target->get_obj();
+  int r = store->get_obj_ref(obj, &ref, &bucket);
   if (r < 0)
     return r;
 
-  rgw_obj& obj = target->get_obj();
-  r = store->get_obj_ref(obj, &ref, &bucket);
+  bool fake_not_exist = (!exist_retry && !target->versioned());
+
+  bool reset_obj = (meta.flags & PUT_OBJ_CREATE) != 0;
+  r = target->prepare_atomic_modification(op, reset_obj, meta.ptag, meta.if_match, meta.if_nomatch, false, &state, fake_not_exist);
   if (r < 0)
     return r;
 
   bool is_olh = state->is_olh;
-
-  bool reset_obj = (meta.flags & PUT_OBJ_CREATE) != 0;
-  r = target->prepare_atomic_modification(op, reset_obj, meta.ptag, meta.if_match, meta.if_nomatch, false);
-  if (r < 0)
-    return r;
 
   utime_t ut;
   if (meta.set_mtime) {
@@ -3339,7 +3338,7 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
     meta.set_mtime = ut.sec();
   }
 
-  if (state->is_olh) {
+  if (is_olh) {
     op.setxattr(RGW_ATTR_OLH_ID_TAG, state->olh_tag);
   }
   op.mtime(&meta.set_mtime);
@@ -3394,16 +3393,13 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
   if (!op.size())
     return 0;
 
-  string index_tag;
   uint64_t epoch;
   int64_t poolid;
 
-  bool orig_exists = state->exists;
-  uint64_t orig_size = state->size;
+  bool orig_exists = (state && state->exists);
+  uint64_t orig_size = (state ? state->size : 0);
 
   bool versioned_target = (meta.olh_epoch > 0 || !obj.get_instance().empty());
-
-  index_tag = state->write_tag;
 
   bool versioned_op = (target->versioning_enabled() || is_olh || versioned_target);
 
@@ -3414,11 +3410,20 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
     index_op.set_bilog_flags(RGW_BILOG_FLAG_VERSIONED_OP);
   }
 
-  r = index_op.prepare(CLS_RGW_OP_ADD);
-  if (r < 0)
-    return r;
+  if (!exist_retry) {
+    /* we already sent a prepare earlier, we're not in the middle of the retry, so don't send a
+     * second prepare
+     */
+    r = index_op.prepare(CLS_RGW_OP_ADD);
+    if (r < 0)
+      return r;
+  }
 
   r = ref.ioctx.operate(ref.oid, &op);
+  if (fake_not_exist && r == -EEXIST) {
+    target->invalidate_state();
+    return do_write_meta(size, attrs, true);
+  }
   if (r < 0) { /* we can expect to get -ECANCELED if object was replaced under,
                 or -ENOENT if was removed, or -EEXIST if it did not exist
                 before and now it does */
@@ -4899,7 +4904,7 @@ int RGWRados::get_olh_target_state(RGWObjectCtx& obj_ctx, rgw_obj& obj, RGWObjSt
   if (r < 0) {
     return r;
   }
-  r = get_obj_state(&obj_ctx, target, target_state, objv_tracker, false);
+  r = get_obj_state(&obj_ctx, target, target_state, objv_tracker, false, false);
   if (r < 0) {
     return r;
   }
@@ -4907,7 +4912,8 @@ int RGWRados::get_olh_target_state(RGWObjectCtx& obj_ctx, rgw_obj& obj, RGWObjSt
   return 0;
 }
 
-int RGWRados::get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh)
+int RGWRados::get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh,
+                                 bool fake_not_exist)
 {
   bool need_follow_olh = follow_olh && !obj.have_instance();
 
@@ -4922,6 +4928,13 @@ int RGWRados::get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState *
   }
 
   s->obj = obj;
+
+  if (fake_not_exist) {
+    s->exists = false;
+    s->has_attrs = true;
+    s->mtime = 0;
+    return 0;
+  }
 
   int r = raw_obj_stat(obj, &s->size, &s->mtime, &s->epoch, &s->attrset, (s->prefetch_data ? &s->data : NULL), objv_tracker);
   if (r == -ENOENT) {
@@ -4999,12 +5012,12 @@ int RGWRados::get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState *
   return 0;
 }
 
-int RGWRados::get_obj_state(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh)
+int RGWRados::get_obj_state(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh, bool fake_not_exist)
 {
   int ret;
 
   do {
-    ret = get_obj_state_impl(rctx, obj, state, objv_tracker, follow_olh);
+    ret = get_obj_state_impl(rctx, obj, state, objv_tracker, follow_olh, fake_not_exist);
   } while (ret == -EAGAIN);
 
   return ret;
@@ -5158,9 +5171,9 @@ int RGWRados::append_atomic_test(RGWObjectCtx *rctx, rgw_obj& obj,
   return 0;
 }
 
-int RGWRados::Object::get_state(RGWObjState **pstate, bool follow_olh)
+int RGWRados::Object::get_state(RGWObjState **pstate, bool follow_olh, bool fake_not_exist)
 {
-  return store->get_obj_state(&ctx, obj, pstate, NULL, follow_olh);
+  return store->get_obj_state(&ctx, obj, pstate, NULL, follow_olh, fake_not_exist);
 }
 
 void RGWRados::Object::invalidate_state()
@@ -5169,11 +5182,16 @@ void RGWRados::Object::invalidate_state()
 }
 
 int RGWRados::Object::prepare_atomic_modification(ObjectWriteOperation& op, bool reset_obj, const string *ptag,
-                                                  const char *if_match, const char *if_nomatch, bool removal_op)
+                                                  const char *if_match, const char *if_nomatch, bool removal_op,
+                                                  RGWObjState **pstate, bool fake_not_exist)
 {
-  int r = get_state(&state, false);
+  int r = get_state(&state, false, fake_not_exist);
   if (r < 0)
     return r;
+
+  if (pstate) {
+    *pstate = state;
+  }
 
   bool need_guard = (state->has_manifest || (state->obj_tag.length() != 0) ||
                      if_match != NULL || if_nomatch != NULL) &&
@@ -5517,7 +5535,7 @@ int RGWRados::Object::Read::prepare(int64_t *pofs, int64_t *pend)
 
 int RGWRados::SystemObject::get_state(RGWObjState **pstate, RGWObjVersionTracker *objv_tracker)
 {
-  return store->get_obj_state(&ctx, obj, pstate, objv_tracker, false);
+  return store->get_obj_state(&ctx, obj, pstate, objv_tracker, false, false);
 }
 
 int RGWRados::stat_system_obj(RGWObjectCtx& obj_ctx,
@@ -6756,7 +6774,7 @@ int RGWRados::set_olh(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, rgw_obj
       obj_ctx.invalidate(olh_obj);
     }
 
-    ret = get_obj_state(&obj_ctx, olh_obj, &state, NULL, false); /* don't follow olh */
+    ret = get_obj_state(&obj_ctx, olh_obj, &state, NULL, false, false); /* don't follow olh */
     if (ret < 0) {
       return ret;
     }
@@ -6815,7 +6833,7 @@ int RGWRados::unlink_obj_instance(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_i
       obj_ctx.invalidate(olh_obj);
     }
 
-    ret = get_obj_state(&obj_ctx, olh_obj, &state, NULL, false); /* don't follow olh */
+    ret = get_obj_state(&obj_ctx, olh_obj, &state, NULL, false, false); /* don't follow olh */
     if (ret < 0)
       return ret;
 
