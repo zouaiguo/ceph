@@ -12032,11 +12032,14 @@ boost::statechart::result ReplicatedPG::TrimmingObjects::react(const SnapTrim&)
   ReplicatedPG *pg = context< SnapTrimmer >().pg;
   snapid_t snap_to_trim = context<SnapTrimmer>().snap_to_trim;
   set<RepGather *> &repops = context<SnapTrimmer>().repops;
+  OSD *osd = pg->osd->osd;
+  ObjectStore *store = osd->store;
 
   dout(10) << "TrimmingObjects: trimming snap " << snap_to_trim << dendl;
 
   // Get next
   hobject_t old_pos = pos;
+again:
   int r = pg->snap_mapper.get_next_object_to_trim(snap_to_trim, &pos);
   if (r != 0 && r != -ENOENT) {
     derr << __func__ << ": get_next returned " << cpp_strerror(r) << dendl;
@@ -12049,6 +12052,20 @@ boost::statechart::result ReplicatedPG::TrimmingObjects::react(const SnapTrim&)
   }
 
   dout(10) << "TrimmingObjects react trimming " << pos << dendl;
+
+  if (pg->get_object_context(pos, false, NULL) == NULL) {
+    dout(0) << __func__ << " Manually remove " << pos << " if present" << dendl;
+    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+
+    OSDriver::OSTransaction _t(pg->osdriver.get_transaction(t));
+    r = pg->snap_mapper.remove_oid(pos, &_t);
+    if (r != 0 && r != -ENOENT)
+      assert(0);
+    store->queue_transaction_and_cleanup(pg->osr.get(), t);
+    old_pos = pos;
+    goto again;
+  }
+
   RepGather *repop = pg->trim_object(pos);
   if (!repop) {
     dout(10) << __func__ << " could not get write lock on obj "
