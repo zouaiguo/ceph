@@ -151,8 +151,8 @@ struct rgw_http_req_data : public RefCountedObject {
   void finish(int r) {
     Mutex::Locker l(lock);
     ret = r;
-    cond.Signal();
     done.set(1);
+    cond.Signal();
     if (easy_handle)
       curl_easy_cleanup(easy_handle);
 
@@ -380,6 +380,8 @@ void RGWHTTPManager::_complete_request(rgw_http_req_data *req_data)
   if (completion_mgr) {
     completion_mgr->complete(req_data->client->get_user_info());
   }
+dout(0) << __FILE__ << ":" << __LINE__ << dendl;
+  req_data->client->end_data();
   req_data->put();
 }
 

@@ -64,7 +64,6 @@ public:
   int get_status();
 };
 
-
 class RGWRESTStreamWriteRequest : public RGWRESTSimpleRequest {
   Mutex lock;
   list<bufferlist> pending_send;
@@ -99,6 +98,7 @@ protected:
 public:
   int send_data(void *ptr, size_t len);
   int receive_data(void *ptr, size_t len);
+  void end_data();
 
   RGWRESTStreamRWRequest(CephContext *_cct, const char *_method, const string& _url, RGWGetDataCB *_cb,
 	        list<pair<string, string> > *_headers,

@@ -707,6 +707,12 @@ int RGWRESTStreamRWRequest::receive_data(void *ptr, size_t len)
   return len;
 }
 
+void RGWRESTStreamRWRequest::end_data()
+{
+dout(0) << __FILE__ << ":" << __LINE__ << dendl;
+  cb->end_data();
+}
+
 int RGWRESTStreamRWRequest::send_data(void *ptr, size_t len)
 {
   if (outbl.length() == 0) {

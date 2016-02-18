@@ -30,6 +30,8 @@ void RGWCompletionManager::complete(void *user_info)
 
 void RGWCompletionManager::_complete(void *user_info)
 {
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << ": user_info=" << (void *)user_info << dendl;
+assert(user_info);
   complete_reqs.push_back(user_info);
   cond.Signal();
 }
@@ -37,12 +39,14 @@ void RGWCompletionManager::_complete(void *user_info)
 int RGWCompletionManager::get_next(void **user_info)
 {
   Mutex::Locker l(lock);
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << ": complete_reqs.size()=" << complete_reqs.size() << dendl;
   while (complete_reqs.empty()) {
     cond.Wait(lock);
     if (going_down.read() != 0) {
       return -ECANCELED;
     }
   }
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << ": complete_reqs.size()=" << complete_reqs.size() << dendl;
   *user_info = complete_reqs.front();
   complete_reqs.pop_front();
   return 0;
@@ -336,7 +340,7 @@ static void _aio_completion_notifier_cb(librados::completion_t cb, void *arg)
   ((RGWAioCompletionNotifier *)arg)->cb();
 }
 
-RGWAioCompletionNotifier::RGWAioCompletionNotifier(RGWCompletionManager *_mgr, void *_user_data) : completion_mgr(_mgr), user_data(_user_data) {
+RGWAioCompletionNotifier::RGWAioCompletionNotifier(RGWCompletionManager *_mgr, void *_user_data) : completion_mgr(_mgr), user_data(_user_data), multi_use(false) {
   c = librados::Rados::aio_create_completion((void *)this, _aio_completion_notifier_cb, NULL);
 }
 
@@ -499,6 +503,7 @@ int RGWCoroutinesManager::run(list<RGWCoroutinesStack *>& stacks)
 
     RGWCoroutinesStack *blocked_stack;
     while (completion_mgr.try_get_next((void **)&blocked_stack)) {
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << ": blocked_stack=" << (void *)blocked_stack << dendl;
       handle_unblocked_stack(context_stacks, scheduled_stacks, blocked_stack, &blocked_count);
     }
 

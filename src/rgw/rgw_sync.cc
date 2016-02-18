@@ -666,16 +666,30 @@ class RGWFetchAllMetaCR : public RGWCoroutine {
 
   map<uint32_t, rgw_meta_sync_marker>& markers;
 
+  RGWAioCompletionNotifier *cn;
+  RGWRESTStreamResource *req;
+
+  int ret;
+  string entrypoint;
+  bool more;
+  bufferlist bl;
 public:
   RGWFetchAllMetaCR(RGWMetaSyncEnv *_sync_env, int _num_shards,
                     map<uint32_t, rgw_meta_sync_marker>& _markers) : RGWCoroutine(_sync_env->cct), sync_env(_sync_env),
 						      num_shards(_num_shards),
-						      ret_status(0), entries_index(NULL), lease_cr(NULL), lost_lock(false), failed(false), markers(_markers) {
+						      ret_status(0), entries_index(NULL), lease_cr(NULL), lost_lock(false), failed(false), markers(_markers),
+                                                      cn(NULL), req(NULL), ret(0), more(false) {
   }
 
   ~RGWFetchAllMetaCR() {
     if (lease_cr) {
       lease_cr->put();
+    }
+    if (cn) {
+      cn->put();
+    }
+    if (req) {
+      req->put();
     }
   }
 
@@ -743,11 +757,44 @@ public:
       rearrange_sections();
       sections_iter = sections.begin();
       for (; sections_iter != sections.end(); ++sections_iter) {
-        yield {
-	  string entrypoint = string("/admin/metadata/") + *sections_iter;
+        {
+	  entrypoint = string("/admin/metadata/") + *sections_iter;
 #warning need a better scaling solution here, requires streaming output
+
+          cn = stack->create_completion_notifier();
+
+          cn->set_multi_use(true);
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+          req = new RGWRESTStreamResource(conn, entrypoint, NULL, NULL, sync_env->http_manager, cn);
+          req->set_user_info((void *)stack);
+
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+          ret = req->aio_operate();
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+          if (ret < 0) {
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+            ldout(cct, 0) << "ERROR: " << __func__ << "(): failed to send request to " << entrypoint << ", ret=" << ret << dendl;
+            yield lease_cr->go_down();
+            drain_all();
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+            return set_cr_error(ret);
+          }
+
+          do {
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+            yield set_io_blocked(true);
+            bufferlist bl;
+            more = req->wait_data(&bl);
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << " bl.length()=" << bl.length() << " more=" << (int)more << dendl;
+          } while (more);
+
+          yield set_io_blocked(true);
+          req->finish(&bl);
+
+#if 0
 	  call(new RGWReadRESTResourceCR<list<string> >(cct, conn, sync_env->http_manager,
 				       entrypoint, NULL, &result));
+#endif
 	}
         if (get_ret_status() < 0) {
           ldout(cct, 0) << "ERROR: failed to fetch metadata section: " << *sections_iter << dendl;

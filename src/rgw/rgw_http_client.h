@@ -50,6 +50,7 @@ public:
 
   virtual int receive_header(void *ptr, size_t len) = 0;
   virtual int receive_data(void *ptr, size_t len) = 0;
+  virtual void end_data() {}
   virtual int send_data(void *ptr, size_t len) = 0;
 
   void set_send_length(size_t len) {

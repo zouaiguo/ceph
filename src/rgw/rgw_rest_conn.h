@@ -13,6 +13,7 @@
 class CephContext;
 class RGWRados;
 class RGWGetObjData;
+class RGWAioCompletionNotifier;
 
 template <class T>
 static int parse_decode_json(CephContext *cct, T& t, bufferlist& bl)
@@ -257,6 +258,85 @@ int RGWRESTReadResource::wait(T *dest)
   }
   return 0;
 }
+
+class RGWRESTStreamResource : public RefCountedObject {
+  CephContext *cct;
+  RGWRESTConn *conn;
+  string resource;
+  param_list_t params;
+  map<string, string> headers;
+
+  Mutex lock;
+  Cond cond;
+
+  bufferlist bl;
+
+  class StreamCB : public RGWGetDataCB {
+    RGWRESTStreamResource *origin;
+  public:
+    StreamCB(RGWRESTStreamResource *_origin) : origin(_origin) {}
+    int handle_data(bufferlist& inbl, off_t bl_ofs, off_t bl_len) {
+      origin->handle_data(inbl);
+      return bl_len;
+    }
+
+    void end_data() {
+      origin->end_data();
+    }
+  } cb;
+
+  RGWHTTPManager *mgr;
+  RGWRESTStreamReadRequest req;
+
+  bool is_done;
+
+  RGWAioCompletionNotifier *cn;
+
+public:
+  RGWRESTStreamResource(RGWRESTConn *_conn,
+		      const string& _resource,
+		      const rgw_http_param_pair *pp,
+		      param_list_t *extra_headers,
+		      RGWHTTPManager *_mgr,
+                      RGWAioCompletionNotifier *_cn);
+
+  void set_user_info(void *user_info) {
+    req.set_user_info(user_info);
+  }
+  void *get_user_info() {
+    return req.get_user_info();
+  }
+
+  int aio_operate();
+
+  string to_str() {
+    return req.to_str();
+  }
+
+  int get_http_status() {
+    return req.get_http_status();
+  }
+
+  int finish(bufferlist *pbl) {
+    int ret = req.wait();
+    put();
+    if (ret < 0) {
+      return ret;
+    }
+
+    if (req.get_status() < 0) {
+      return req.get_status();
+    }
+    *pbl = bl;
+    return 0;
+  }
+
+  void handle_data(bufferlist& bl);
+
+  bool wait_data(bufferlist *pbl); /* return true if need to call again */
+  void end_data();
+};
+
 
 class RGWRESTPostResource : public RefCountedObject {
   CephContext *cct;

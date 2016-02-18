@@ -76,6 +76,7 @@ class RGWAioCompletionNotifier : public RefCountedObject {
   librados::AioCompletion *c;
   RGWCompletionManager *completion_mgr;
   void *user_data;
+  bool multi_use;
 
 public:
   RGWAioCompletionNotifier(RGWCompletionManager *_mgr, void *_user_data);
@@ -88,8 +89,15 @@ public:
   }
 
   void cb() {
+generic_dout(0) << __FILE__ << ":" << __LINE__ << " user_data=" << (void *)user_data << dendl;
     completion_mgr->complete(user_data);
-    put();
+    if (!multi_use) {
+      put();
+    }
+  }
+
+  void set_multi_use(bool mu) {
+    multi_use = mu;
   }
 };
 

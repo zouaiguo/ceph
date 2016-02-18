@@ -3,6 +3,7 @@
 
 #include "rgw_rados.h"
 #include "rgw_rest_conn.h"
+#include "rgw_coroutine.h"
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -271,6 +272,82 @@ int RGWRESTReadResource::aio_read()
   }
 
   return 0;
+}
+
+RGWRESTStreamResource::RGWRESTStreamResource(RGWRESTConn *_conn,
+                                         const string& _resource,
+		                         const rgw_http_param_pair *pp,
+                                         param_list_t *extra_headers,
+                                         RGWHTTPManager *_mgr,
+                                         RGWAioCompletionNotifier *_cn)
+  : cct(_conn->get_ctx()), conn(_conn), resource(_resource),
+    params(make_param_list(pp)),
+    lock("RGWRESTStreamResource"), cb(this), mgr(_mgr),
+    req(cct, conn->get_url(), &cb, NULL, NULL), is_done(false), cn(_cn)
+{
+  params.push_back(param_pair_t(RGW_SYS_PARAM_PREFIX "zonegroup", conn->get_self_zonegroup()));
+
+  if (extra_headers) {
+    headers.insert(extra_headers->begin(), extra_headers->end());
+  }
+
+  req.set_params(&params);
+}
+
+int RGWRESTStreamResource::aio_operate()
+{
+  get();
+  int ret = req.get_resource(conn->get_key(), headers, resource, mgr);
+  if (ret < 0) {
+    put();
+    ldout(cct, 0) << __func__ << ": get_resource() resource=" << resource << " returned ret=" << ret << dendl;
+    return ret;
+  }
+
+  return 0;
+}
+
+void RGWRESTStreamResource::handle_data(bufferlist& inbl)
+{
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+  Mutex::Locker l(lock);
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+  bl.claim_append(inbl);
+  cond.Signal();
+  if (cn) {
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+    cn->cb();
+  }
+}
+
+bool RGWRESTStreamResource::wait_data(bufferlist *pbl)
+{
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+  Mutex::Locker l(lock);
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+
+  while (bl.length() == 0 && !is_done) {
+    cond.Wait(lock);
+  }
+
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+
+  pbl->claim_append(bl);
+
+  return !is_done;
+}
+
+void RGWRESTStreamResource::end_data()
+{
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+  Mutex::Locker l(lock);
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+  is_done = true;
+  cond.Signal();
+  if (cn) {
+ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
+    cn->cb();
+  }
 }
 
 RGWRESTPostResource::RGWRESTPostResource(RGWRESTConn *_conn,
