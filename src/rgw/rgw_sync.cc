@@ -761,12 +761,18 @@ public:
 	  entrypoint = string("/admin/metadata/") + *sections_iter;
 #warning need a better scaling solution here, requires streaming output
 
+          if (cn) {
+            cn->put();
+          }
           cn = stack->create_completion_notifier();
-
           cn->set_multi_use(true);
 ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
-          req = new RGWRESTStreamResource(conn, entrypoint, NULL, NULL, sync_env->http_manager, cn);
-          req->set_user_info((void *)stack);
+          {
+            rgw_http_param_pair pairs[] = { { "format", "plain"},
+                                            { NULL, NULL } };
+            req = new RGWRESTStreamResource(conn, entrypoint, pairs, NULL, sync_env->http_manager, cn);
+            req->set_user_info((void *)stack);
+          }
 
 ldout(cct, 0) << __FILE__ << ":" << __LINE__ << dendl;
           ret = req->aio_operate();
@@ -790,7 +796,8 @@ ldout(cct, 0) << __FILE__ << ":" << __LINE__ << " bl.length()=" << bl.length() <
 
           yield set_io_blocked(true);
           req->finish(&bl);
-
+          req->put();
+          req = NULL;
 #if 0
 	  call(new RGWReadRESTResourceCR<list<string> >(cct, conn, sync_env->http_manager,
 				       entrypoint, NULL, &result));
