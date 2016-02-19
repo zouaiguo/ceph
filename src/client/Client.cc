@@ -9402,11 +9402,7 @@ int Client::ll_getattr(Inode *in, struct stat *attr, int uid, int gid)
     return 0;
   }
 
-  int res;
-  if (vino.snapid < CEPH_NOSNAP)
-    res = 0;
-  else
-    res = _getattr(in, CEPH_STAT_CAP_INODE_ALL, uid, gid);
+  int res = _getattr(in, CEPH_STAT_CAP_INODE_ALL, uid, gid);
   if (res == 0)
     fill_stat(in, attr);
   ldout(cct, 3) << "ll_getattr " << vino << " = " << res << dendl;
