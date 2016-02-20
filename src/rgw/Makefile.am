@@ -80,7 +80,7 @@ libcivetweb_la_SOURCES =  \
 
 libcivetweb_la_CXXFLAGS = ${CIVETWEB_INCLUDE} -Woverloaded-virtual ${AM_CXXFLAGS}
 libcivetweb_la_CFLAGS = -I$(srcdir)/civetweb/include ${CIVETWEB_INCLUDE} -DNO_SSL_DL
-LIBCIVETWEB_DEPS += -lssl
+LIBCIVETWEB_DEPS += -lssl -lcrypto
 
 noinst_LTLIBRARIES += libcivetweb.la
 
