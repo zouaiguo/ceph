@@ -1255,7 +1255,7 @@ int do_check_object_locator(const string& tenant_name, const string& bucket_name
   map<string, bool> common_prefixes;
   string ns;
 
-  RGWRados::Bucket target(store, bucket);
+  RGWRados::Bucket target(store, bucket_info);
   RGWRados::Bucket::List list_op(&target);
 
   string marker;
@@ -3496,7 +3496,7 @@ int main(int argc, char **argv)
       map<string, bool> common_prefixes;
       string ns;
 
-      RGWRados::Bucket target(store, bucket);
+      RGWRados::Bucket target(store, bucket_info);
       RGWRados::Bucket::List list_op(&target);
 
       list_op.params.prefix = prefix;
