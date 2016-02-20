@@ -12,17 +12,17 @@ PY_DISTUTILS = \
 	CYTHON_BUILD_DIR="$(shell readlink -f $(builddir))/build" \
 	${PYTHON} ./setup.py
 
-pybind-all: librbd.la ${srcdir}/ceph_ver.h
+pybind-all: librbd.la ceph_ver.h
 	cd $(srcdir)/pybind; $(PY_DISTUTILS) build \
 	--build-base $(shell readlink -f $(builddir))/build \
 	--verbose
 
-pybind-clean: ${srcdir}/ceph_ver.h
+pybind-clean: ceph_ver.h
 	cd $(srcdir)/pybind; $(PY_DISTUTILS) clean \
 	--build-base $(shell readlink -f $(builddir))/build \
 	--verbose
 
-pybind-install-exec: ${srcdir}/ceph_ver.h
+pybind-install-exec: ceph_ver.h
 	if test "$(DESTDIR)" ; then \
 		if lsb_release -si | grep --quiet 'Ubuntu\|Debian\|Devuan' ; then \
 			options=--install-layout=deb ; \
