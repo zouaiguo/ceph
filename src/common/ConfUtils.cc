@@ -296,6 +296,13 @@ load_from_buffer(const char *buf, size_t sz, std::deque<std::string> *errors,
   size_t line_len = -1;
   size_t rem = sz;
   while (1) {
+    if (rem <= line_len) {
+      ostringstream oss;
+      oss << "read_conf: parse error on " << line_no << ": line_len longer than "
+	  << "remaining chars.";
+      errors->push_back(oss.str()); 
+      break;
+    }
     b += line_len + 1;
     rem -= line_len + 1;
     if (rem == 0)
