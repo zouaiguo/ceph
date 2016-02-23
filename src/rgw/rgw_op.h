@@ -293,6 +293,7 @@ public:
     buckets_objcount = 0;
     buckets_size = 0;
     buckets_size_rounded = 0;
+    is_truncated = false;
   }
 
   int verify_permission();
