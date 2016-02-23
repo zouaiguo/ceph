@@ -329,13 +329,17 @@ void librados::RadosClient::shutdown()
     lock.Unlock();
     return;
   }
-  if (state == CONNECTED) {
-    finisher.wait_for_empty();
-    finisher.stop();
-  }
+
   bool need_objecter = false;
   if (objecter && objecter->initialized.read()) {
     need_objecter = true;
+  }
+
+  if (state == CONNECTED) {
+    if (need_objecter)
+      watch_flush();
+    finisher.wait_for_empty();
+    finisher.stop();
   }
   state = DISCONNECTED;
   instance_id = 0;
@@ -343,7 +347,6 @@ void librados::RadosClient::shutdown()
   lock.Unlock();
   if (need_objecter) {
     // make sure watch callbacks are flushed
-    watch_flush();
     objecter->shutdown();
   }
   monclient.shutdown();
