@@ -151,7 +151,8 @@ public:
 	oid(o),
 	key(k),
 	dirty(false),
-	exists(false) {
+	exists(false),
+	tail_offset(0) {
     }
 
     void flush();
