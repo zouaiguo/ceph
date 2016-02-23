@@ -45,6 +45,7 @@ int rgw_rest_get_json_input(CephContext *cct, req_state *s, T& out,
     *empty = false;
 
   if ((rv = rgw_rest_read_all_input(s, &data, &data_len, max_len)) < 0) {
+    lderr(cct) << "rgw_rest_get_json_input failed to read input:" << rv << dendl;
     return rv;
   }
 
@@ -52,7 +53,7 @@ int rgw_rest_get_json_input(CephContext *cct, req_state *s, T& out,
     if (empty) {
       *empty = true;
     }
-
+    lderr(cct) << "rgw_rest_get_json_input empty input" << dendl;
     return -EINVAL;
   }
 
@@ -60,6 +61,7 @@ int rgw_rest_get_json_input(CephContext *cct, req_state *s, T& out,
 
   if (!parser.parse(data, data_len)) {
     free(data);
+    lderr(cct) << "rgw_rest_get_json_input failed to parse data" << dendl;
     return -EINVAL;
   }
 
@@ -68,6 +70,7 @@ int rgw_rest_get_json_input(CephContext *cct, req_state *s, T& out,
   try {
       decode_json_obj(out, &parser);
   } catch (JSONDecoder::err& e) {
+        lderr(cct) << "rgw_rest_get_json_input failed to decode json" << dendl;
       return -EINVAL;
   }
 
