@@ -265,65 +265,33 @@ Here, [DEV] is path to a block device.
 Options
 =======
 
-.. option:: --prepend-to-path PATH
+.. option:: --activate-key
 
-   Prepend PATH to $PATH for backward compatibility (default ``/usr/bin``).
-
-.. option:: --statedir PATH
-
-   Directory in which ceph configuration is preserved (default ``/usr/lib/ceph``).
-
-.. option:: --sysconfdir PATH
-
-   Directory in which ceph configuration files are found (default ``/etc/ceph``).
-
-.. option:: --setuser USER
-
-   Specify a user for ceph-disk to use when dropping privileges (default ``ceph``, or ``root`` if ``ceph`` does not exist)
-
-.. option:: --setgroup GROUP
-
-   Specify a group for ceph-disk to use when dropping privileges (default ``ceph``, or ``root`` if ``ceph`` does not exist)
+	Provide ``[PATH]`` to keyfile for OSD. 
 
 .. option:: --cluster
 
-   Provide name of the ceph cluster in which the OSD is being prepared.
+	Provide name of the ceph cluster in which the OSD is being prepared.
 
 .. option:: --cluster-uuid
 
-   Provide uuid of the ceph cluster in which the OSD is being prepared.
-
-.. option:: --fs-type
-
-   Provide the filesytem type for the OSD. e.g. ``xfs/ext4/btrfs``.
-
-.. option:: --osd-uuid
-
-	Unique OSD uuid to assign to the disk.
-
-.. option:: --journal-uuid
-
-	Unique uuid to assign to the journal.
-
-.. option:: --zap-disk
-
-	Destroy the partition table and content of a disk.
-
-.. option:: --data-dir
-
-	Verify that ``[data-path]`` is of a directory.
+	Provide uuid of the ceph cluster in which the OSD is being prepared.
 
 .. option:: --data-dev
 
 	Verify that ``[data-path]`` is of a block device.
 
-.. option:: --journal-file
+.. option:: --data-dir
 
-	Verify that journal is a file.
+	Verify that ``[data-path]`` is of a directory.
 
-.. option:: --journal-dev
+.. option:: --deactivate-by-id
 
-	Verify that journal is a block device.
+	Deactivate OSD with ``[OSD-ID]``
+
+.. option:: --destroy-by-id
+
+	Destroy Ceph OSD with ``[OSD-ID]``. Removes the OSD from the cluster, the crushmap and deallocates OSD ID.
 
 .. option:: --dmcrypt
 
@@ -333,13 +301,66 @@ Options
 
 	Directory where ``dm-crypt`` keys are stored.
 
-.. option:: --setuser
+.. option:: --fs-type
 
-    Define the user for ceph-disk's child processes (default ``ceph``, or ``root``)
+	Provide the filesytem type for the OSD. e.g. ``xfs/ext4/btrfs``.
 
-.. option:: --setgroup
+.. option:: --journal-dev
 
-    Define the group for ceph-disk's child processes (default ``ceph``, or ``root``)
+	Verify that journal is a block device.
+
+.. option:: --journal-file
+
+	Verify that journal is a file.
+
+.. option:: --journal-uuid
+
+	Unique uuid to assign to the journal.
+
+.. option:: --mark-init
+
+	Overwrite the ``auto`` detection of the init system, e.g. ``sysvinit``, ``systemd``, ``upstart`` or ``none``
+
+.. option:: --mark-out
+
+	Marks the OSD as out. If you are not sure you will destroy OSD, do not use this option.
+
+.. option:: --no-start-daemon
+
+	Perform all activation step but do not start the OSD daemon.
+
+.. option:: --osd-uuid
+
+	Unique OSD uuid to assign to the disk.
+
+.. option:: --prepend-to-path PATH
+
+   	Prepend PATH to $PATH for backward compatibility (default ``/usr/bin``).
+
+.. option:: --reactivate
+
+	To re-activate a OSD which has been deactivated with the ``deactivate`` subcommand.
+
+.. option:: --setgroup GROUP
+
+   	Specify a group for ceph-disk to use when dropping privileges (default ``ceph``, or ``root`` if ``ceph`` does not exist)
+
+.. option:: --setuser USER
+
+   	Specify a user for ceph-disk to use when dropping privileges (default ``ceph``, or ``root`` if ``ceph`` does not exist)
+
+.. option:: --statedir PATH
+
+   	Directory in which ceph configuration is preserved (default ``/usr/lib/ceph``).
+
+.. option:: --sysconfdir PATH
+
+   	Directory in which ceph configuration files are found (default ``/etc/ceph``).
+
+.. option:: --zap
+.. option:: --zap-disk
+
+	Destroy the partition table and content of a disk.
 
 Availability
 ============
