@@ -484,7 +484,6 @@ add_dependencies(check
   monmaptool
   ceph-osd
   ceph-dencoder
-  unittest_librbd
   ceph-objectstore-tool
   ceph-monstore-tool
   osdmaptool
