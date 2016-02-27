@@ -70,6 +70,8 @@ class XioDispatchHook;
 
 namespace ceph {
 
+const static int CEPH_BUFFER_APPEND_SIZE(4096);
+
 namespace buffer CEPH_BUFFER_API {
   /*
    * exceptions
@@ -134,7 +136,6 @@ namespace buffer CEPH_BUFFER_API {
   class raw_char;
   class raw_pipe;
   class raw_unshareable; // diagnostic, unshareable char buffer
-  class raw_combined;
 
 
   class xio_mempool;
@@ -384,10 +385,6 @@ namespace buffer CEPH_BUFFER_API {
       other.clear();
       return *this;
     }
-
-    unsigned get_num_buffers() const { return _buffers.size(); }
-    const ptr& front() const { return _buffers.front(); }
-    const ptr& back() const { return _buffers.back(); }
 
     unsigned get_memcopy_count() const {return _memcopy_count; }
     const std::list<ptr>& buffers() const { return _buffers; }
