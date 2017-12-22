@@ -5442,7 +5442,7 @@ bool OSDMonitor::erasure_code_profile_in_use(
   for (map<int64_t, pg_pool_t>::const_iterator p = pools.begin();
        p != pools.end();
        ++p) {
-    if (p->second.erasure_code_profile == profile) {
+    if (p->second.erasure_code_profile == profile && p->second.is_erasure()) {
       *ss << osdmap.pool_name[p->first] << " ";
       found = true;
     }
@@ -10194,6 +10194,7 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
     } else {
       //NOTE:for replicated pool,cmd_map will put rule_name to erasure_code_profile field
       rule_name = erasure_code_profile;
+      erasure_code_profile = "";
     }
 
     if (!implicit_rule_creation && rule_name != "") {
